@@ -1,0 +1,72 @@
+name: publish
+
+# Runs on a version tag, and the tag is the version: v0.3.0 publishes 0.3.0,
+# v0.4.0-beta1 publishes 0.4.0 as prerelease beta1.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, e.g. 0.3.0 or 0.4.0-beta1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    environment: psgallery
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Read the version
+        id: version
+        shell: pwsh
+        run: |
+          $ref = '${{ github.ref_name }}'
+          # Not $input: that is an automatic variable.
+          $requested = '${{ inputs.version }}'
+          $version = if ($requested) { $requested } else { $ref -replace '^v', '' }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$') {
+              throw "'$version' is not a version: tag as v1.2.3 or v1.2.3-beta1."
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$version"
+          Write-Host "Publishing $version"
+
+      - name: Install Pester 5
+        shell: pwsh
+        run: |
+          $pester = Get-Module -ListAvailable -Name Pester |
+              Where-Object { $_.Version -ge [version]'5.0.0' -and $_.Version -lt [version]'6.0.0' }
+          if (-not $pester) {
+              Install-Module Pester -Scope CurrentUser -MinimumVersion 5.5.0 -MaximumVersion 5.99.99 `
+                  -Force -SkipPublisherCheck -AllowClobber
+          }
+          (Get-Module -ListAvailable -Name Pester).Version | Sort-Object -Descending | Select-Object -First 1
+
+      # The script runs the suite first and refuses to build or publish on a red
+      # one, so there is no separate test step to keep in sync.
+      - name: Build and publish
+        shell: pwsh
+        env:
+          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          if (-not $env:PSGALLERY_KEY) { throw 'the PSGALLERY_KEY secret is not set.' }
+          ./Publish-AnsiModule.ps1 -Version '${{ steps.version.outputs.version }}' -Publish -Force
+
+      - name: Keep the build
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: PwshAnsi-${{ steps.version.outputs.version }}
+          path: artifacts/PwshAnsi/**
+          if-no-files-found: warn

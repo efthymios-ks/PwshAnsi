@@ -1,0 +1,5 @@
+# Built module, produced by Publish-InkModule.ps1
+artifacts/
+
+# Test results, when Invoke-Test.ps1 is asked for them
+testResults.xml
