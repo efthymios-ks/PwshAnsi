@@ -29,6 +29,122 @@ a renderable; `Out-AnsiHost` paints it, `Out-AnsiString` turns it into strings.
 - [`Invoke-AnsiTask`](docs/Invoke-AnsiTask.md) — run steps behind live text and a progress bar
 - [`Start-AnsiTitleAnimation`](docs/Start-AnsiTitleAnimation.md) — turn the braille dots in the window title while a job runs
 
+## Quick start
+
+Install once (requires pwsh 7+):
+
+```powershell
+Install-Module PwshAnsi -Scope CurrentUser
+Import-Module PwshAnsi
+
+Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
+```
+
+## Auto-install guard
+
+For scripts that need to work on machines where PwshAnsi may not be installed, or that may be
+launched from Windows PowerShell 5.1, paste these two functions at the top of your script:
+
+```powershell
+function Assert-Pwsh7 {
+    param([hashtable]$Arguments = @{}, [string]$ScriptPath)
+
+    if ($PSVersionTable.PSVersion.Major -ge 7) { return }
+
+    if (-not $ScriptPath) {
+        $ScriptPath = Get-PSCallStack |
+            Select-Object -Skip 1 -ExpandProperty ScriptName -ErrorAction SilentlyContinue |
+            Where-Object { $_ -and $_ -ne $PSCommandPath } |
+            Select-Object -First 1
+    }
+    if (-not $ScriptPath -or -not (Test-Path $ScriptPath)) {
+        throw 'Assert-Pwsh7: cannot determine the script to relaunch. Pass -ScriptPath.'
+    }
+
+    $findPwsh = {
+        $cmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+        if ($cmd) { return $cmd.Source }
+        foreach ($c in @(
+                (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
+                (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe')
+                (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
+            )) {
+            if ($c -and (Test-Path $c)) { return $c }
+        }
+        return $null
+    }
+
+    $pwshPath = & $findPwsh
+    if (-not $pwshPath) {
+        Write-Host "PowerShell 7 is required. Installing..." -ForegroundColor Yellow
+        $installed = $false
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install --id Microsoft.PowerShell --source winget --exact `
+                --accept-package-agreements --accept-source-agreements --silent
+            if ($LASTEXITCODE -eq 0 -and (& $findPwsh)) { $installed = $true }
+        }
+        if (-not $installed) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $bootstrap = Join-Path $env:TEMP 'install-powershell.ps1'
+            Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $bootstrap -UseBasicParsing
+            & $bootstrap -UseMSI -Quiet
+            Remove-Item $bootstrap -Force -ErrorAction SilentlyContinue
+        }
+        $pwshPath = & $findPwsh
+        if (-not $pwshPath) { throw 'PowerShell 7 still not found. Install it manually and re-run.' }
+    }
+
+    $forward = @()
+    foreach ($entry in $Arguments.GetEnumerator()) {
+        if ($entry.Value -is [switch]) {
+            if ($entry.Value.IsPresent) { $forward += "-$($entry.Key)" }
+        } elseif ($entry.Value -is [array]) {
+            $forward += "-$($entry.Key)"; $forward += ($entry.Value | ForEach-Object { [string]$_ })
+        } else {
+            $forward += "-$($entry.Key)"; $forward += [string]$entry.Value
+        }
+    }
+
+    & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @forward
+    exit $LASTEXITCODE
+}
+
+function Assert-PwshAnsi {
+    param([string]$Repository = 'PSGallery')
+
+    if (Get-Module PwshAnsi) { return }
+
+    if (-not (Get-Module PwshAnsi -ListAvailable)) {
+        Write-Host "Installing PwshAnsi from $Repository..." -ForegroundColor Yellow
+        try {
+            if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+                Install-PSResource -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
+                    -TrustRepository -ErrorAction Stop
+            } else {
+                if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                    Install-PackageProvider -Name NuGet -Scope CurrentUser -Force -ErrorAction Stop | Out-Null
+                }
+                Install-Module -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
+                    -Force -AllowClobber -ErrorAction Stop
+            }
+        } catch {
+            throw "Could not install PwshAnsi: $($_.Exception.Message)"
+        }
+    }
+
+    Import-Module PwshAnsi -Force -Global -ErrorAction Stop
+    if (-not (Get-Command Format-AnsiText -ErrorAction SilentlyContinue)) {
+        throw 'PwshAnsi imported but its commands are missing. Install it manually and re-run.'
+    }
+}
+
+# Call in this order: pwsh 7 first, then PwshAnsi.
+Assert-Pwsh7 -Arguments $PSBoundParameters
+Assert-PwshAnsi
+
+Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
+```
+
 ## Setup
 
 ```powershell

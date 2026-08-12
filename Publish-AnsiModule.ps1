@@ -100,6 +100,7 @@ $script:InternalModule = @('Ansi.Core.psm1', 'Ansi.Emoji.psm1')
 $script:BuildOrder = @(
     'Ansi.Emoji.psm1'
     'Ansi.Core.psm1'
+    'Assert-AnsiPrerequisites.psm1'
     'Out-AnsiHost.psm1'
     'Out-AnsiString.psm1'
     'Format-AnsiText.psm1'
@@ -184,7 +185,7 @@ function Get-PublicFunction {
 
     $list = $match.Groups['list'].Value
     $list = $list -replace '`\s*\r?\n', ' '
-    $names = $list -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z]+-[A-Za-z]+$' }
+    $names = $list -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z]+-[A-Za-z][A-Za-z0-9]*$' }
     return @($names)
 }
 
