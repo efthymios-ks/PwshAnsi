@@ -5,14 +5,18 @@ passed in, in list order. Returns `$null` when cancelled with Esc or timed out, 
 an empty array when nothing was ticked.
 
 The list is repainted in place as the cursor moves and items are toggled.
+`-Grouped` takes a list of headed groups instead, and `-ToggleGroups` makes those
+headers tick their whole group at once.
 
 ## Synopsis
 
 ```powershell
 Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
-                       [-LabelProperty <string>] [-Selected <object[]>]
+                       [-LabelProperty <string>]
+                       [-Grouped] [-GroupLabelProperty <string>] [-GroupChoicesProperty <string>]
+                       [-ToggleGroups] [-Selected <object[]>]
                        [-CursorColor <string>] [-TitleColor <string>] [-ChoiceColor <string>]
-                       [-MarkColor <string>] [-HintColor <string>]
+                       [-GroupColor <string>] [-MarkColor <string>] [-HintColor <string>]
                        [-PageSize <int>] [-Required] [-RequiredMessage <string>]
                        [-RequiredColor <string>] [-TimeoutSeconds <int>]
                        [-Markdown] [-Escape]
@@ -25,11 +29,16 @@ Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
 | `-Title`           | —                            | Row above the list. Parsed as markup; `-Markdown` adds sugar, `-Escape` turns parsing off. |
 | `-Choices`         | —                            | The items. Accepts pipeline input. Empty throws.                             |
 | `-LabelProperty`   | none                         | Property to label objects with. `-ChoiceLabelProperty` aliases it.            |
+| `-Grouped`         | off                          | `-Choices` are groups, not items: a header and its members. See [Groups](#groups). |
+| `-GroupLabelProperty`   | `Name`                  | Property each group's header text is read from.                              |
+| `-GroupChoicesProperty` | `Choices`               | Property each group's members are read from. `Group` for `Group-Object` output. |
+| `-ToggleGroups`    | off                          | Headers take a box of their own and space sets or clears the whole group. Needs `-Grouped`. `-GroupToggle` aliases it. |
 | `-Selected`        | none                         | Items to start ticked, matched by value against `-Choices`.                    |
 | `-CursorColor`     | `BrightCyan`                 | Colour of the `›` marker and the row it is on. `-Color` aliases it.           |
-| `-MarkColor`       | `BrightGreen`                | Colour of a ticked `[✓]`.                                                    |
+| `-MarkColor`       | `BrightGreen`                | Colour of a ticked `[✓]`, and of a group's `[✓]` or `[-]`.                    |
 | `-TitleColor`      | none                         | Colour of the title. Markup inside it wins.                                  |
 | `-ChoiceColor`     | none                         | Colour of the other rows.                                                    |
+| `-GroupColor`      | none                         | Colour of the group headers. They are bold either way.                       |
 | `-HintColor`       | `BrightBlack`                | Colour of empty boxes, the count, and the key hint.                          |
 | `-PageSize`        | `10`                         | Rows shown at once; the window scrolls with the cursor.                       |
 | `-Required`        | off                          | Refuse Enter while nothing is ticked.                                        |
@@ -44,10 +53,13 @@ Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
 | ↑ / ↓ (or `k` / `j`) | move the cursor                                      |
 | Home / End           | first / last choice                                   |
 | PageUp / PageDown    | move by one page                                      |
-| Space                | toggles the item under the cursor                     |
+| Space                | toggles the item under the cursor, or the whole group when the cursor is on a header |
 | `a`                  | ticks everything, or clears it if all are ticked      |
 | Enter                | accepts the current ticks                             |
 | Esc                  | cancels, returns `$null`                              |
+
+Without `-ToggleGroups` the cursor moves straight past the headers, so every key
+lands on an item.
 
 ## What it draws
 
@@ -61,6 +73,83 @@ Which suites?
 
 A position counter is prefixed when the list is longer than `-PageSize`, and the
 row under the hint carries the `-Required` message when Enter is refused.
+
+## Groups
+
+`-Grouped` says the choices are groups rather than items — a header and the items
+under it. The header is shape only: no box, no cursor, skipped by every movement
+key.
+
+```powershell
+$suites = @(
+    @{ Name = 'Formatters'; Choices = @('Text', 'Rule', 'Path') }
+    @{ Name = 'Layout'; Choices = @('Table', 'Grid', 'Panel') }
+)
+Read-AnsiMultiSelection 'Which suites?' $suites -Grouped -GroupColor BrightYellow
+```
+
+```
+Which suites?
+  Formatters
+›   [✓] Text
+    [ ] Rule
+    [✓] Path
+  Layout
+    [ ] Table
+    [ ] Grid
+    [ ] Panel
+2 selected  ↑↓ move · space toggle · a all · enter accept · esc cancel
+```
+
+`-ToggleGroups` puts the headers in the cursor's path and gives each one a box that
+reports its members — `[✓]` all, `[-]` some, `[ ]` none:
+
+```powershell
+Read-AnsiMultiSelection 'Which suites?' $suites -Grouped -ToggleGroups
+```
+
+```
+Which suites?
+› [-] Formatters
+    [✓] Text
+    [ ] Rule
+    [✓] Path
+  [ ] Layout
+    [ ] Table
+    [ ] Grid
+    [ ] Panel
+2 selected  ↑↓ move · space toggle · a all · enter accept · esc cancel
+```
+
+Space on a header sets or clears the group whole — it never flips the members one
+by one. A group already `[✓]` clears; `[-]` and `[ ]` both fill, so a part-ticked
+group completes on the next space. `a` still ticks every item in every group, and
+`-Selected` still pre-ticks members, with each header reporting what its members
+came out as.
+
+Only members are ever returned, in list order, headers never — whether they can be
+toggled or not. The count and the position counter follow the rows the cursor can
+reach: `-Grouped` counts items, `-ToggleGroups` counts headers too, and `-PageSize`
+counts rows either way, because that is what the window holds.
+
+The shape is the one `Group-Object` already hands out — name the property its
+members live under:
+
+```powershell
+Get-ChildItem .\src -File | Group-Object Extension |
+    Read-AnsiMultiSelection 'Which files?' -Grouped -ToggleGroups `
+        -GroupChoicesProperty Group -LabelProperty Name
+```
+
+An empty group draws its header and nothing else, and toggling it does nothing. A
+group with no name, or none of the members property, throws — as does
+`-ToggleGroups` with no groups to toggle:
+
+```
+A group has no Name. Name every group, or name the property with -GroupLabelProperty.
+Group 'Layout' has no Choices. Give every group its choices, or name the property with -GroupChoicesProperty.
+Read-AnsiMultiSelection -ToggleGroups needs -Grouped: there are no groups to toggle.
+```
 
 ## Returning objects
 
@@ -127,16 +216,22 @@ pwsh -File .\demo\Demo-ReadAnsiMultiSelection.ps1
 ```
 
 Interactive: ticking, `a` for all, `-Selected`, paging, `-Required`,
-`-LabelProperty` with objects, the colour parameters, a timeout, and a plan built
+`-LabelProperty` with objects, the colour parameters, a timeout, `-Grouped` with
+view-only and with `-ToggleGroups` headers, `Group-Object` input, and a plan built
 from the result.
 
 ## Tests
 
-`tests/Read-AnsiMultiSelection.Tests.ps1` — 19 Pester 5 tests. The console seams are
+`tests/Read-AnsiMultiSelection.Tests.ps1` — 36 Pester 5 tests. The console seams are
 replaced in the module scope, so scripted keys drive the prompt. Covers ticking and
 unticking, list order, `a` toggling all and clearing, `-Selected`, object identity,
 the checkbox rows and count, paging, `-Required` with its message, empty results,
-Esc, timeouts, empty choices, and the redirected-input error.
+Esc, timeouts, empty choices, and the redirected-input error — and for groups: the
+boxless view-only headers, headers skipped when they cannot be toggled, members-only
+results, the item count, `-ToggleGroups` filling and clearing a group whole, the
+`[-]` part-ticked box from both keys and `-Selected`, other groups left untouched,
+`a` across groups, the focusable-row counter, an empty group toggling nothing, and
+the `-ToggleGroups` without `-Grouped` error.
 
 ```powershell
 pwsh -File .\Invoke-Test.ps1 -Path .\tests\Read-AnsiMultiSelection.Tests.ps1

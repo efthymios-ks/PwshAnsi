@@ -104,6 +104,12 @@ BeforeAll {
     $script:Fruit = @('apple', 'banana', 'cherry', 'date', 'elderberry')
     $script:Cursor = [string][char]0x203A   # ›
     $script:Check = [string][char]0x2713    # ✓
+
+    # Rows: 0 Berries, 1 strawberry, 2 raspberry, 3 Citrus, 4 lemon, 5 lime.
+    $script:Groups = @(
+        @{ Name = 'Berries'; Choices = @('strawberry', 'raspberry') }
+        @{ Name = 'Citrus'; Choices = @('lemon', 'lime') }
+    )
 }
 
 Describe 'Read-AnsiMultiSelection — ticking' {
@@ -240,6 +246,156 @@ Describe 'Read-AnsiMultiSelection — cancel, timeout, non-interactive' {
 
     It 'throws when there are no choices' {
         { Read-AnsiMultiSelection 'Pick' @() } | Should -Throw '*at least one choice*'
+    }
+}
+
+Describe 'Read-AnsiMultiSelection — groups, view only' {
+    It 'draws headers without a box and members with one' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Spacebar), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+
+        $frame.Count | Should -Be 9                     # title + 2 headers + 4 members + hint + note
+        $frame[1] | Should -BeExactly '  Berries'
+        $frame[2] | Should -BeExactly ($script:Cursor + '   [' + $script:Check + '] strawberry')
+        $frame[3] | Should -BeExactly '    [ ] raspberry'
+        $frame[4] | Should -BeExactly '  Citrus'
+        $frame[7] | Should -Match '^1 selected'
+    }
+
+    It 'moves straight past a header' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @(
+            (New-Key -Key DownArrow), (New-Key -Key DownArrow), (New-Key -Key Spacebar), (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped }
+        @($result.Value) | Should -Be @('lemon')
+    }
+
+    It 'returns members in list order, never a header' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'a'), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped }
+        @($result.Value) | Should -Be @('strawberry', 'raspberry', 'lemon', 'lime')
+    }
+
+    It 'counts members, not headers' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'a'), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -PageSize 3 }
+        (Get-FinalFrame -Result $result -Title 'Pick')[-2] | Should -Match '^1/4  4 selected'
+    }
+
+    It 'pre-ticks inside groups with -Selected' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -Selected 'raspberry', 'lime' }
+        @($result.Value) | Should -Be @('raspberry', 'lime')
+    }
+
+    It 'throws -ToggleGroups without -Grouped' {
+        { Read-AnsiMultiSelection 'Pick' $script:Fruit -ToggleGroups } | Should -Throw '*needs -Grouped*'
+    }
+}
+
+Describe 'Read-AnsiMultiSelection — groups, -ToggleGroups' {
+    BeforeAll {
+        function Get-PlainRows {
+            param([Parameter(Mandatory)][object]$Result)
+            return (@($Result.Rows | ForEach-Object { Remove-Ansi $_ }) -join "`n")
+        }
+    }
+
+    It 'starts on the header and boxes it' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+
+        $frame[1] | Should -BeExactly ($script:Cursor + ' [ ] Berries')
+        $frame[2] | Should -BeExactly '    [ ] strawberry'
+        $frame[4] | Should -BeExactly '  [ ] Citrus'
+    }
+
+    It 'sets the whole group with one space' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Spacebar), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        @($result.Value) | Should -Be @('strawberry', 'raspberry')
+
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+        $frame[1] | Should -BeExactly ($script:Cursor + ' [' + $script:Check + '] Berries')
+        $frame[2] | Should -BeExactly ('    [' + $script:Check + '] strawberry')
+        $frame[3] | Should -BeExactly ('    [' + $script:Check + '] raspberry')
+    }
+
+    It 'clears the whole group on a second space' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @(
+            (New-Key -Key Spacebar), (New-Key -Key Spacebar), (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        @($result.Value).Count | Should -Be 0
+    }
+
+    It 'leaves the other groups alone' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @(
+            (New-Key -Key End), (New-Key -Key UpArrow), (New-Key -Key UpArrow), (New-Key -Key Spacebar)
+            (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        @($result.Value) | Should -Be @('lemon', 'lime')
+    }
+
+    It 'shows a part-ticked group as [-] and completes it on space' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @(
+            (New-Key -Key DownArrow), (New-Key -Key Spacebar), (New-Key -Key UpArrow)
+            (New-Key -Key Spacebar), (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        (Get-PlainRows -Result $result) | Should -Match ([regex]::Escape('[-] Berries'))
+        @($result.Value) | Should -Be @('strawberry', 'raspberry')
+    }
+
+    It 'reports a full group from -Selected' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups -Selected 'strawberry', 'raspberry'
+        }
+        (Get-FinalFrame -Result $result -Title 'Pick')[1] |
+            Should -BeExactly ($script:Cursor + ' [' + $script:Check + '] Berries')
+    }
+
+    It 'reports a part-ticked group from -Selected' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups -Selected 'strawberry'
+        }
+        (Get-FinalFrame -Result $result -Title 'Pick')[1] | Should -BeExactly ($script:Cursor + ' [-] Berries')
+    }
+
+    It 'ticks every member with a, whatever group it is in' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'a'), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
+        @($result.Value) | Should -Be @('strawberry', 'raspberry', 'lemon', 'lime')
+        (Get-FinalFrame -Result $result -Title 'Pick')[1] |
+            Should -BeExactly ($script:Cursor + ' [' + $script:Check + '] Berries')
+    }
+
+    It 'counts headers as rows the cursor can reach' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups -PageSize 3 }
+        (Get-FinalFrame -Result $result -Title 'Pick')[-2] | Should -Match '^1/6'
+    }
+
+    It 'toggles nothing for an empty group' {
+        $groups = @(
+            @{ Name = 'Empty'; Choices = @() }
+            @{ Name = 'Citrus'; Choices = @('lemon') }
+        )
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Spacebar), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $groups -Grouped -ToggleGroups }
+        @($result.Value).Count | Should -Be 0
+        (Get-FinalFrame -Result $result -Title 'Pick')[1] | Should -BeExactly ($script:Cursor + ' [ ] Empty')
+    }
+
+    It 'returns $null on Escape after toggling a group' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Spacebar), (New-Key -Key Escape))
+        (Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }).Value |
+            Should -BeNullOrEmpty
     }
 }
 

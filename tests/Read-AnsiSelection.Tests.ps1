@@ -104,6 +104,12 @@ BeforeAll {
     $script:Fruit = @('apple', 'banana', 'cherry', 'date', 'elderberry')
     $script:Cursor = [string][char]0x203A   # ›
     $script:Check = [string][char]0x2713    # ✓
+
+    # Rows: 0 Berries, 1 strawberry, 2 raspberry, 3 Citrus, 4 lemon, 5 lime.
+    $script:Groups = @(
+        @{ Name = 'Berries'; Choices = @('strawberry', 'raspberry') }
+        @{ Name = 'Citrus'; Choices = @('lemon', 'lime') }
+    )
 }
 
 Describe 'Read-AnsiSelection — moving and choosing' {
@@ -305,6 +311,133 @@ Describe 'Read-AnsiSelection — cancel, timeout, non-interactive, NO_COLOR' {
         } finally {
             Set-AnsiTestNoColor -Module Read-AnsiSelection -Value $false
         }
+    }
+}
+
+Describe 'Read-AnsiSelection — groups' {
+    It 'draws a header per group with its members indented' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+
+        $frame.Count | Should -Be 8                     # title + 2 headers + 4 members + hint
+        $frame[1] | Should -BeExactly '  Berries'
+        $frame[2] | Should -BeExactly ($script:Cursor + '   strawberry')
+        $frame[3] | Should -BeExactly '    raspberry'
+        $frame[4] | Should -BeExactly '  Citrus'
+        $frame[6] | Should -BeExactly '    lime'
+    }
+
+    It 'draws headers in bold' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }
+        ($result.Rows -join '') | Should -Match ([regex]::Escape($PSStyle.Bold))
+    }
+
+    It 'starts on the first member, not the header' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }
+        $result.Value | Should -BeExactly 'strawberry'
+    }
+
+    It 'moves straight past a header' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @(
+            (New-Key -Key DownArrow), (New-Key -Key DownArrow), (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }
+        $result.Value | Should -BeExactly 'lemon'
+    }
+
+    It 'moves back up past a header' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @(
+            (New-Key -Key End), (New-Key -Key UpArrow), (New-Key -Key UpArrow), (New-Key -Key Enter)
+        )
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }
+        $result.Value | Should -BeExactly 'raspberry'
+    }
+
+    It 'lands Home and End on members' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key End), (New-Key -Key Enter))
+        (Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }).Value | Should -BeExactly 'lime'
+
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @(
+            (New-Key -Key End), (New-Key -Key Home), (New-Key -Key Enter)
+        )
+        (Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped }).Value | Should -BeExactly 'strawberry'
+    }
+
+    It 'snaps a page move onto a member' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key PageDown), (New-Key -Key Enter))
+        (Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped -PageSize 3 }).Value |
+            Should -BeExactly 'lemon'
+
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @(
+            (New-Key -Key End), (New-Key -Key PageUp), (New-Key -Key Enter)
+        )
+        (Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped -PageSize 3 }).Value |
+            Should -BeExactly 'raspberry'
+    }
+
+    It 'counts members, not headers, in the position counter' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key End), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped -PageSize 3 }
+        (Get-FinalFrame -Result $result -Title 'Pick')[-1] | Should -Match '^4/4'
+    }
+
+    It 'reads Group-Object output with the property names named' {
+        $shape = @(
+            [PSCustomObject]@{ Name = 'Berries'; Group = @('strawberry') }
+            [PSCustomObject]@{ Name = 'Citrus'; Group = @('lemon') }
+        )
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key End), (New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiSelection 'Pick' $shape -Grouped -GroupChoicesProperty Group
+        }
+        $result.Value | Should -BeExactly 'lemon'
+        (Get-FinalFrame -Result $result -Title 'Pick')[1] | Should -BeExactly '  Berries'
+    }
+
+    It 'labels members with -LabelProperty and returns the objects' {
+        $groups = @(
+            @{ Name = 'Formatters'; Choices = @([PSCustomObject]@{ Name = 'alpha'; Id = 1 }) }
+            @{ Name = 'Prompts'; Choices = @([PSCustomObject]@{ Name = 'beta'; Id = 2 }) }
+        )
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key End), (New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $groups -Grouped -LabelProperty Name }
+        $result.Value.Id | Should -Be 2
+        (Get-FinalFrame -Result $result -Title 'Pick')[2] | Should -BeExactly '    alpha'
+    }
+
+    It 'colours headers with -GroupColor' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped -GroupColor BrightYellow }
+        ($result.Rows -join '') | Should -Match ([regex]::Escape($PSStyle.Foreground.BrightYellow))
+    }
+
+    It 'keeps an empty group as a header with nothing under it' {
+        $groups = @(
+            @{ Name = 'Empty'; Choices = @() }
+            @{ Name = 'Citrus'; Choices = @('lemon') }
+        )
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $groups -Grouped }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+        $frame[1] | Should -BeExactly '  Empty'
+        $frame[2] | Should -BeExactly '  Citrus'
+        $result.Value | Should -BeExactly 'lemon'
+    }
+
+    It 'throws when a group carries no choices' {
+        { Read-AnsiSelection 'Pick' @(@{ Name = 'Berries' }) -Grouped } | Should -Throw '*has no Choices*'
+    }
+
+    It 'throws when a group has no name' {
+        { Read-AnsiSelection 'Pick' @(@{ Choices = @('lemon') }) -Grouped } | Should -Throw '*has no Name*'
+    }
+
+    It 'throws when every group is empty' {
+        { Read-AnsiSelection 'Pick' @(@{ Name = 'Empty'; Choices = @() }) -Grouped } |
+            Should -Throw '*at least one choice*'
     }
 }
 

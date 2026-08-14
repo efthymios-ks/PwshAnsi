@@ -3,6 +3,9 @@
 # Read-AnsiMultiSelection.psm1
 # Public: Read-AnsiMultiSelection — tick several items with space, accept with enter.
 # Returns the items the caller passed in, or $null on Esc / timeout.
+# -Grouped takes headed groups instead of a flat list. A header is shape only until
+# -ToggleGroups, which puts it in the cursor's path and makes space set or clear the
+# whole group at once — never each member on its own.
 # Depends on Ansi.Core.psm1 for markup, colour, cursor control, and input seams.
 
 Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChecking
@@ -21,6 +24,15 @@ function Read-AnsiMultiSelection {
         [Alias('ChoiceLabelProperty')]
         [string]$LabelProperty,
 
+        [switch]$Grouped,
+
+        [string]$GroupLabelProperty = 'Name',
+
+        [string]$GroupChoicesProperty = 'Choices',
+
+        [Alias('GroupToggle')]
+        [switch]$ToggleGroups,
+
         [object[]]$Selected,
 
         [Alias('Color')]
@@ -29,6 +41,8 @@ function Read-AnsiMultiSelection {
         [string]$TitleColor,
 
         [string]$ChoiceColor,
+
+        [string]$GroupColor,
 
         [string]$MarkColor = 'BrightGreen',
 
@@ -59,6 +73,9 @@ function Read-AnsiMultiSelection {
     }
     end {
         if ($collected.Count -eq 0) { throw 'Read-AnsiMultiSelection needs at least one choice.' }
+        if ($ToggleGroups -and -not $Grouped) {
+            throw 'Read-AnsiMultiSelection -ToggleGroups needs -Grouped: there are no groups to toggle.'
+        }
         if (-not (Test-AnsiInteractive)) {
             throw 'Read-AnsiMultiSelection needs an interactive console: input is redirected.'
         }
@@ -70,21 +87,36 @@ function Read-AnsiMultiSelection {
         $requiredFg = Get-AnsiColorName -Name $RequiredColor
         $titleFg = if ($TitleColor) { Get-AnsiColorName -Name $TitleColor } else { $null }
         $choiceFg = if ($ChoiceColor) { Get-AnsiColorName -Name $ChoiceColor } else { $null }
+        $groupFg = if ($GroupColor) { Get-AnsiColorName -Name $GroupColor } else { $null }
 
-        $items = ConvertTo-AnsiChoices -Items $collected.ToArray() -LabelProperty $LabelProperty `
-            -Fg $choiceFg -Markdown:$Markdown -Escape:$Escape
+        $items = $null
+        if ($Grouped) {
+            $items = ConvertTo-AnsiGroupedChoices -Items $collected.ToArray() `
+                -GroupLabelProperty $GroupLabelProperty -GroupChoicesProperty $GroupChoicesProperty `
+                -LabelProperty $LabelProperty -Fg $choiceFg -GroupFg $groupFg `
+                -Markdown:$Markdown -Escape:$Escape
+        } else {
+            $items = ConvertTo-AnsiChoices -Items $collected.ToArray() -LabelProperty $LabelProperty `
+                -Fg $choiceFg -Markdown:$Markdown -Escape:$Escape
+        }
 
-        # Pre-ticked items, matched by value against the original objects.
+        # A header is only in the cursor's path when it can be toggled.
+        $focus = Get-AnsiChoiceFocus -Rows $items -IncludeGroups:$ToggleGroups
+        if ($focus.Count -eq 0) { throw 'Read-AnsiMultiSelection needs at least one choice.' }
+
+        # Pre-ticked items, matched by value against the original objects. Headers
+        # hold no tick of their own — theirs is read off their members.
         $ticked = New-Object bool[] $items.Count
         if ($Selected) {
             for ($i = 0; $i -lt $items.Count; $i++) {
+                if ($items[$i].IsGroup) { continue }
                 foreach ($pre in $Selected) {
                     if ($items[$i].Item -eq $pre) { $ticked[$i] = $true; break }
                 }
             }
         }
 
-        $index = 0
+        $index = $focus[0]
         $window = Get-AnsiChoiceWindow -Index $index -Count $items.Count -PageSize $PageSize
         $drawn = 0
         $note = ''
@@ -96,6 +128,8 @@ function Read-AnsiMultiSelection {
             while ($true) {
                 $drawn = Write-AnsiMultiList -Title $Title -TitleFg $titleFg -Items $items -Ticked $ticked `
                     -Index $index -Window $window -CursorFg $cursorFg -MarkFg $markFg -HintFg $hintFg `
+                    -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
+                    -ToggleGroups:$ToggleGroups `
                     -Note $note -NoteFg $requiredFg -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape `
                     -Redraw ($drawn -gt 0) -Drawn $drawn
                 $note = ''
@@ -113,17 +147,24 @@ function Read-AnsiMultiSelection {
                 if ($null -eq $key) { return $null }
 
                 switch ($key.Key) {
-                    'UpArrow' { if ($index -gt 0) { $index-- } }
-                    'DownArrow' { if ($index -lt $items.Count - 1) { $index++ } }
-                    'Home' { $index = 0 }
-                    'End' { $index = $items.Count - 1 }
-                    'PageUp' { $index = [Math]::Max(0, $index - $window.Size) }
-                    'PageDown' { $index = [Math]::Min($items.Count - 1, $index + $window.Size) }
-                    'Spacebar' { $ticked[$index] = -not $ticked[$index] }
+                    'UpArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
+                    'DownArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
+                    'Home' { $index = $focus[0] }
+                    'End' { $index = $focus[$focus.Count - 1] }
+                    'PageUp' {
+                        $index = Get-AnsiChoiceFocusNear -Focus $focus -Direction -1 `
+                            -Target ([Math]::Max(0, $index - $window.Size))
+                    }
+                    'PageDown' {
+                        $index = Get-AnsiChoiceFocusNear -Focus $focus -Direction 1 `
+                            -Target ([Math]::Min($items.Count - 1, $index + $window.Size))
+                    }
+                    'Spacebar' { Switch-AnsiMultiTick -Items $items -Ticked $ticked -Index $index }
                     'Escape' { return $null }
                     'Enter' {
                         $chosen = [System.Collections.Generic.List[object]]::new()
                         for ($i = 0; $i -lt $items.Count; $i++) {
+                            if ($items[$i].IsGroup) { continue }
                             if ($ticked[$i]) { $null = $chosen.Add($items[$i].Item) }
                         }
                         if ($Required -and $chosen.Count -eq 0) {
@@ -134,14 +175,21 @@ function Read-AnsiMultiSelection {
                     }
                     default {
                         switch ([char]::ToLowerInvariant($key.KeyChar)) {
-                            ' ' { $ticked[$index] = -not $ticked[$index] }
-                            'k' { if ($index -gt 0) { $index-- } }
-                            'j' { if ($index -lt $items.Count - 1) { $index++ } }
+                            ' ' { Switch-AnsiMultiTick -Items $items -Ticked $ticked -Index $index }
+                            'k' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
+                            'j' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
                             'a' {
-                                # Toggle everything: all on unless everything is already on.
+                                # Toggle every item, whatever group it is in: all on
+                                # unless everything is already on.
                                 $allOn = $true
-                                for ($i = 0; $i -lt $ticked.Count; $i++) { if (-not $ticked[$i]) { $allOn = $false; break } }
-                                for ($i = 0; $i -lt $ticked.Count; $i++) { $ticked[$i] = -not $allOn }
+                                for ($i = 0; $i -lt $items.Count; $i++) {
+                                    if ($items[$i].IsGroup) { continue }
+                                    if (-not $ticked[$i]) { $allOn = $false; break }
+                                }
+                                for ($i = 0; $i -lt $items.Count; $i++) {
+                                    if ($items[$i].IsGroup) { continue }
+                                    $ticked[$i] = -not $allOn
+                                }
                             }
                         }
                     }
@@ -152,6 +200,25 @@ function Read-AnsiMultiSelection {
         } finally {
             Restore-AnsiCursor -State $cursor
         }
+    }
+}
+
+# One space: an item flips, a group is set whole or cleared whole. A group that is
+# already all on clears; anything else fills, so a part-ticked group completes first.
+function Switch-AnsiMultiTick {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object[]]$Items,
+        [Parameter(Mandatory)][bool[]]$Ticked,
+        [Parameter(Mandatory)][int]$Index
+    )
+    if (-not $Items[$Index].IsGroup) {
+        $Ticked[$Index] = -not $Ticked[$Index]
+        return
+    }
+    $fill = (Get-AnsiGroupTickState -Rows $Items -Ticked $Ticked -GroupIndex $Index) -ne 'All'
+    for ($i = 0; $i -lt $Items.Count; $i++) {
+        if ($Items[$i].Group -eq $Index) { $Ticked[$i] = $fill }
     }
 }
 
@@ -167,6 +234,9 @@ function Write-AnsiMultiList {
         [Parameter(Mandatory)][string]$CursorFg,
         [Parameter(Mandatory)][string]$MarkFg,
         [Parameter(Mandatory)][string]$HintFg,
+        [int]$Ordinal = 0,
+        [int]$Total = 0,
+        [switch]$ToggleGroups,
         [AllowEmptyString()][string]$Note = '',
         [AllowNull()][string]$NoteFg,
         [switch]$NoColor,
@@ -189,9 +259,23 @@ function Write-AnsiMultiList {
         $runs = [System.Collections.Generic.List[object]]::new()
         $marker = if ($i -eq $Index) { [string][char]0x203A + ' ' } else { '  ' }
         $null = $runs.Add((New-AnsiMultiRun -Text $marker -Fg $CursorFg))
+        if ($Items[$i].Depth -gt 0) {
+            $null = $runs.Add((New-AnsiMultiRun -Text ('  ' * $Items[$i].Depth) -Fg $null))
+        }
 
-        $box = if ($Ticked[$i]) { "[$check] " } else { '[ ] ' }
-        $null = $runs.Add((New-AnsiMultiRun -Text $box -Fg $(if ($Ticked[$i]) { $MarkFg } else { $HintFg })))
+        if ($Items[$i].IsGroup) {
+            # A group's box reports its members: all, some, none. Without
+            # -ToggleGroups the header carries no box at all — it is a label.
+            if ($ToggleGroups) {
+                $state = Get-AnsiGroupTickState -Rows $Items -Ticked $Ticked -GroupIndex $i
+                $glyph = switch ($state) { 'All' { $check } 'Some' { '-' } default { ' ' } }
+                $null = $runs.Add((New-AnsiMultiRun -Text "[$glyph] " `
+                            -Fg $(if ($state -eq 'None') { $HintFg } else { $MarkFg })))
+            }
+        } else {
+            $box = if ($Ticked[$i]) { "[$check] " } else { '[ ] ' }
+            $null = $runs.Add((New-AnsiMultiRun -Text $box -Fg $(if ($Ticked[$i]) { $MarkFg } else { $HintFg })))
+        }
 
         foreach ($r in $Items[$i].Runs) {
             $copy = $r
@@ -208,9 +292,11 @@ function Write-AnsiMultiList {
     }
 
     $count = 0
-    foreach ($t in $Ticked) { if ($t) { $count++ } }
+    for ($i = 0; $i -lt $Items.Count; $i++) {
+        if (-not $Items[$i].IsGroup -and $Ticked[$i]) { $count++ }
+    }
     $hint = "$count selected  ↑↓ move · space toggle · a all · enter accept · esc cancel"
-    if ($Items.Count -gt $Window.Size) { $hint = "$($Index + 1)/$($Items.Count)  " + $hint }
+    if ($Items.Count -gt $Window.Size) { $hint = "$Ordinal/$Total  " + $hint }
     Clear-AnsiLine
     Write-Host (Format-AnsiLine -Runs @((New-AnsiMultiRun -Text $hint -Fg $HintFg)) `
             -Width 0 -Justify Left -NoColor:$NoColor)

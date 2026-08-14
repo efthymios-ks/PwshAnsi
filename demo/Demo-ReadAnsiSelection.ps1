@@ -77,8 +77,26 @@ Show-DemoHeader '6. -TimeoutSeconds 5'
 $timed = Read-AnsiSelection 'Quick, pick one' $fruit -TimeoutSeconds 5
 Show-Answer 'Fruit' $timed
 
-# 7. Usage pattern — pick, then show the choice in a panel
-Show-DemoHeader '7. Usage pattern — choose a target, then act on it'
+# 7. Groups — headers are shape only, the cursor moves straight past them
+Show-DemoHeader '7. -Grouped (headers are view only)'
+$grouped = @(
+    @{ Name = 'Berries'; Choices = @('Strawberry', 'Raspberry', 'Blueberry') }
+    @{ Name = 'Citrus'; Choices = @('Lemon', 'Lime', 'Orange') }
+    @{ Name = 'Stone'; Choices = @('Peach', 'Plum') }
+)
+$fromGroup = Read-AnsiSelection 'Pick a fruit' $grouped -Grouped -GroupColor BrightYellow
+Show-Answer 'Fruit' $fromGroup
+
+# 8. Group-Object output, straight in — name the property the members live under
+Show-DemoHeader '8. -Grouped over Group-Object (-GroupChoicesProperty Group)'
+$byExtension = Get-ChildItem (Join-Path (Split-Path -Parent $PSScriptRoot) 'src') -File |
+    Group-Object Extension
+$file = Read-AnsiSelection 'Which file?' $byExtension -Grouped -GroupChoicesProperty Group `
+    -LabelProperty Name -PageSize 12
+Show-Answer 'File' $(if ($null -ne $file) { $file.Name } else { $null })
+
+# 9. Usage pattern — pick, then show the choice in a panel
+Show-DemoHeader '9. Usage pattern — choose a target, then act on it'
 $target = Read-AnsiSelection 'Deploy to' @('Dev', 'Staging', 'Production')
 if ($null -eq $target) {
     Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost

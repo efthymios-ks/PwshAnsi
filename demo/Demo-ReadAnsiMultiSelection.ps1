@@ -90,8 +90,31 @@ Show-DemoHeader '8. -TimeoutSeconds 5'
 $timed = Read-AnsiMultiSelection 'Quick, tick some' $suites -TimeoutSeconds 5
 Show-Answers 'Suites' $timed
 
-# 9. Usage pattern — the selection drives what runs next
-Show-DemoHeader '9. Usage pattern — run only what was ticked'
+# 9. Groups, view only — headers give the list shape, the cursor skips them
+Show-DemoHeader '9. -Grouped (headers are view only)'
+$grouped = @(
+    @{ Name = 'Formatters'; Choices = @('Text', 'Rule', 'Path', 'JSON') }
+    @{ Name = 'Layout'; Choices = @('Table', 'Grid', 'Panel', 'Tree') }
+    @{ Name = 'Prompts'; Choices = @('Selection', 'Confirm', 'Text') }
+)
+$fromGroups = Read-AnsiMultiSelection 'Which suites?' $grouped -Grouped -GroupColor BrightYellow
+Show-Answers 'Suites' $fromGroups
+
+# 10. Groups you can toggle — space on a header sets or clears the whole group
+Show-DemoHeader '10. -ToggleGroups (space on a header sets or clears it all)'
+$toggled = Read-AnsiMultiSelection 'Which suites?' $grouped -Grouped -ToggleGroups `
+    -GroupColor BrightYellow -Selected 'Table', 'Grid'
+Show-Answers 'Suites' $toggled
+
+# 11. Group-Object output, straight in — name the property the members live under
+Show-DemoHeader '11. -Grouped over Group-Object (-GroupChoicesProperty Group)'
+$byTests = $components | Group-Object { if ($_.Tests -ge 70) { 'Heavily tested' } else { 'Lightly tested' } }
+$picked2 = Read-AnsiMultiSelection 'Which components?' $byTests -Grouped -ToggleGroups `
+    -GroupChoicesProperty Group -LabelProperty Name
+Show-Answers 'Components' $(if ($null -ne $picked2) { @($picked2).Name } else { $null })
+
+# 12. Usage pattern — the selection drives what runs next
+Show-DemoHeader '12. Usage pattern — run only what was ticked'
 $run = Read-AnsiMultiSelection 'Run which steps?' @('Restore', 'Build', 'Test', 'Pack') -Selected 'Build', 'Test'
 if ($null -eq $run) {
     Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost

@@ -612,7 +612,8 @@ function Clear-AnsiLine {
 }
 
 # Choices as {Item; Runs}: the label is parsed once, the original object is kept
-# so a prompt can return what the caller passed in.
+# so a prompt can return what the caller passed in. IsGroup / Group / Depth are the
+# grouping fields every prompt row carries; a flat list is all items at depth 0.
 function ConvertTo-AnsiChoices {
     [CmdletBinding()]
     param(
@@ -639,9 +640,170 @@ function ConvertTo-AnsiChoices {
             $runs = ConvertFrom-AnsiMarkup -Text $label -AsMarkdown:$Markdown
             foreach ($r in $runs) { if (-not $r.Fg) { $r.Fg = $Fg } }
         }
-        $null = $choices.Add([PSCustomObject]@{ Item = $item; Label = $label; Runs = @($runs) })
+        $null = $choices.Add([PSCustomObject]@{
+                Item    = $item
+                Label   = $label
+                Runs    = @($runs)
+                IsGroup = $false
+                Group   = -1
+                Depth   = 0
+            })
     }
     return , $choices.ToArray()
+}
+
+# Grouped choices flattened to the same rows ConvertTo-AnsiChoices returns, a group
+# header followed by its members at depth 1. Group is the row index of the header a
+# member belongs to, -1 for a header or an ungrouped row, which is what the tick and
+# focus helpers below read. The shape is the one Group-Object already hands out:
+# a name and a collection, whatever the two properties are called.
+function ConvertTo-AnsiGroupedChoices {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Items,
+        [Parameter(Mandatory)][string]$GroupLabelProperty,
+        [Parameter(Mandatory)][string]$GroupChoicesProperty,
+        [AllowNull()][string]$LabelProperty,
+        [AllowNull()][string]$Fg,
+        [AllowNull()][string]$GroupFg,
+        [switch]$Markdown,
+        [switch]$Escape
+    )
+    $rows = [System.Collections.Generic.List[object]]::new()
+    foreach ($group in $Items) {
+        if ($null -eq $group) { continue }
+
+        if (-not (Test-AnsiItemField -Item $group -Name $GroupLabelProperty)) {
+            throw "A group has no $GroupLabelProperty. Name every group, or name the property with -GroupLabelProperty."
+        }
+        $label = [string](Get-AnsiItemField -Item $group -Name $GroupLabelProperty)
+
+        if (-not (Test-AnsiItemField -Item $group -Name $GroupChoicesProperty)) {
+            throw "Group '$label' has no $GroupChoicesProperty. Give every group its choices, or name the property with -GroupChoicesProperty."
+        }
+        # Assigned in two steps: an if that yields an empty array yields nothing.
+        $members = @()
+        $raw = Get-AnsiItemField -Item $group -Name $GroupChoicesProperty
+        if ($null -ne $raw) { $members = @($raw) }
+        $headerRuns = $null
+        if ($Escape) {
+            $headerRuns = @(New-AnsiRun -Text $label -Fg $GroupFg)
+        } else {
+            $headerRuns = ConvertFrom-AnsiMarkup -Text $label -AsMarkdown:$Markdown
+            foreach ($r in $headerRuns) { if (-not $r.Fg) { $r.Fg = $GroupFg } }
+        }
+        # A header reads as a header: bold unless its own markup already styled it.
+        foreach ($r in $headerRuns) {
+            if ($r.Styles -notcontains 'Bold') { $r.Styles = @($r.Styles + 'Bold') }
+        }
+
+        $null = $rows.Add([PSCustomObject]@{
+                Item    = $group
+                Label   = $label
+                Runs    = @($headerRuns)
+                IsGroup = $true
+                Group   = -1
+                Depth   = 0
+            })
+        $at = $rows.Count - 1
+
+        if ($members.Count -gt 0) {
+            $children = ConvertTo-AnsiChoices -Items $members -LabelProperty $LabelProperty `
+                -Fg $Fg -Markdown:$Markdown -Escape:$Escape
+            foreach ($child in $children) {
+                $child.Group = $at
+                $child.Depth = 1
+                $null = $rows.Add($child)
+            }
+        }
+    }
+    return , $rows.ToArray()
+}
+
+# The rows the cursor may land on. Group headers are skipped unless the prompt lets
+# them be toggled, so a header a caller only wanted for shape is never focused.
+function Get-AnsiChoiceFocus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows,
+        [switch]$IncludeGroups
+    )
+    $focus = [System.Collections.Generic.List[int]]::new()
+    for ($i = 0; $i -lt $Rows.Count; $i++) {
+        if ($Rows[$i].IsGroup -and -not $IncludeGroups) { continue }
+        $null = $focus.Add($i)
+    }
+    return , $focus.ToArray()
+}
+
+# The focusable row at or past -Target, searching forward when -Direction is 1 and
+# back when it is -1, falling the other way when that end is reached. -1 when there
+# is nothing to focus at all.
+function Get-AnsiChoiceFocusNear {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][int[]]$Focus,
+        [Parameter(Mandatory)][int]$Target,
+        [ValidateSet(-1, 1)][int]$Direction = 1
+    )
+    if ($Focus.Count -eq 0) { return -1 }
+    if ($Direction -eq 1) {
+        foreach ($row in $Focus) { if ($row -ge $Target) { return $row } }
+        return $Focus[$Focus.Count - 1]
+    }
+    for ($i = $Focus.Count - 1; $i -ge 0; $i--) { if ($Focus[$i] -le $Target) { return $Focus[$i] } }
+    return $Focus[0]
+}
+
+# One focusable row up or down from -Index, stopping at the ends the way the
+# ungrouped lists do.
+function Step-AnsiChoiceFocus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][int[]]$Focus,
+        [Parameter(Mandatory)][int]$Index,
+        [Parameter(Mandatory)][int]$Step
+    )
+    if ($Focus.Count -eq 0) { return $Index }
+    $at = [Array]::IndexOf($Focus, $Index)
+    if ($at -lt 0) {
+        return (Get-AnsiChoiceFocusNear -Focus $Focus -Target $Index -Direction $(if ($Step -lt 0) { -1 } else { 1 }))
+    }
+    $next = [Math]::Min([Math]::Max(0, $at + $Step), $Focus.Count - 1)
+    return $Focus[$next]
+}
+
+# Where the cursor is among the focusable rows, 1-based, for the position counter.
+function Get-AnsiChoiceFocusOrdinal {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][int[]]$Focus,
+        [Parameter(Mandatory)][int]$Index
+    )
+    $at = [Array]::IndexOf($Focus, $Index)
+    return $(if ($at -lt 0) { 0 } else { $at + 1 })
+}
+
+# All, Some, or None of a group's members ticked. An empty group is None, so
+# toggling it sets nothing and reports nothing.
+function Get-AnsiGroupTickState {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows,
+        [Parameter(Mandatory)][AllowEmptyCollection()][bool[]]$Ticked,
+        [Parameter(Mandatory)][int]$GroupIndex
+    )
+    $total = 0
+    $on = 0
+    for ($i = 0; $i -lt $Rows.Count; $i++) {
+        if ($Rows[$i].Group -ne $GroupIndex) { continue }
+        $total++
+        if ($Ticked[$i]) { $on++ }
+    }
+    if ($total -eq 0 -or $on -eq 0) { return 'None' }
+    if ($on -eq $total) { return 'All' }
+    return 'Some'
 }
 
 # The slice of choices to show, keeping the cursor inside it.
@@ -766,6 +928,25 @@ function Get-AnsiItemField {
     return $null
 }
 
+# Whether a named field is there at all, however empty it is. Get-AnsiItemField
+# cannot answer that: a function returning an empty collection returns nothing, so
+# a present-but-empty field and a missing one both read as $null.
+function Test-AnsiItemField {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)][object]$Item,
+        [Parameter(Mandatory)][string]$Name
+    )
+    if ($Item -is [System.Collections.IDictionary]) {
+        foreach ($key in $Item.Keys) {
+            if ([string]$key -eq $Name) { return $true }
+        }
+        return $false
+    }
+    return ($null -ne $Item.PSObject.Properties[$Name])
+}
+
 # Whatever the caller passed reduced to {Label; Value; Color} per item: objects
 # read through the -*Property names, hashtables, or bare numbers — no wrapper type,
 # the same way Format-AnsiTable takes rows. Colours resolve here, so an unknown one
@@ -876,6 +1057,7 @@ Test-AnsiNumber,
 Format-AnsiNumber,
 Get-AnsiChartChar,
 Get-AnsiItemField,
+Test-AnsiItemField,
 ConvertTo-AnsiChartItem,
 ConvertTo-AnsiChartLabel,
 Convert-AnsiChartValue,
@@ -893,4 +1075,10 @@ Start-AnsiWait,
 Move-AnsiCursorUp,
 Clear-AnsiLine,
 ConvertTo-AnsiChoices,
+ConvertTo-AnsiGroupedChoices,
+Get-AnsiChoiceFocus,
+Get-AnsiChoiceFocusNear,
+Step-AnsiChoiceFocus,
+Get-AnsiChoiceFocusOrdinal,
+Get-AnsiGroupTickState,
 Get-AnsiChoiceWindow

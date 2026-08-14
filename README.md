@@ -23,8 +23,8 @@ a renderable; `Out-AnsiHost` paints it, `Out-AnsiString` turns it into strings.
 - [`Format-AnsiBreakdownChart`](docs/Format-AnsiBreakdownChart.md) — one bar split by share, with a legend
 - [`Read-AnsiText`](docs/Read-AnsiText.md) — prompt for a line of text
 - [`Read-AnsiConfirm`](docs/Read-AnsiConfirm.md) — prompt for yes or no
-- [`Read-AnsiSelection`](docs/Read-AnsiSelection.md) — pick one item with the arrow keys
-- [`Read-AnsiMultiSelection`](docs/Read-AnsiMultiSelection.md) — tick several items
+- [`Read-AnsiSelection`](docs/Read-AnsiSelection.md) — pick one item with the arrow keys, flat or under view-only group headers
+- [`Read-AnsiMultiSelection`](docs/Read-AnsiMultiSelection.md) — tick several items, with group headers that tick a group whole
 - [`Read-AnsiPause`](docs/Read-AnsiPause.md) — wait for a key before carrying on
 - [`Invoke-AnsiTask`](docs/Invoke-AnsiTask.md) — run steps behind live text and a progress bar
 - [`Start-AnsiTitleAnimation`](docs/Start-AnsiTitleAnimation.md) — turn the braille dots in the window title while a job runs
