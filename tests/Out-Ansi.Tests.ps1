@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 # Out-Ansi.Tests.ps1
@@ -294,6 +294,17 @@ Describe 'Out-AnsiHost' {
             $frame = Get-AnsiTestFrame
             ([regex]::Matches($frame, [regex]::Escape("`e[K"))).Count | Should -Be 2
             $frame | Should -Not -Match ([regex]::Escape("`e[2J"))
+        }
+
+        It 'erases before writing each row, not after' {
+            # A row that reaches the last column leaves the cursor in the terminal's pending-wrap
+            # state; an EL issued from there erases the cell just written. Order is the only part
+            # of that a test can see - the wrap itself needs a real terminal.
+            Out-AnsiHost -Rendering (New-TestRendering) -Row 0 -Column 0
+            $frame = Get-AnsiTestFrame
+            foreach ($match in [regex]::Matches($frame, "`e\[\d+;\d+H(?<next>.{3})")) {
+                $match.Groups['next'].Value | Should -BeExactly "`e[K"
+            }
         }
 
         It 'saves the cursor, hides it, and puts it back' {

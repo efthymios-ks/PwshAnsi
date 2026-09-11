@@ -35,8 +35,17 @@ Read-AnsiText [-Prompt] <string> [-Default <string>] [-AllowEmpty] [-Secret]
 
 | Key       | Effect                        |
 | --------- | ----------------------------- |
-| any       | appends, echoed in `-AnswerColor` (or `*` with `-Secret`) |
-| Backspace | removes the last character     |
+| any       | inserts at the caret, echoed in `-AnswerColor` (or `*` with `-Secret`) |
+| ← / →     | moves the caret; the field scrolls sideways when the text is wider than it |
+| Backspace | removes the character before the caret |
+
+A paste arrives as a burst of keys and is drawn once, not per character. A newline inside that
+burst is a pasted line break, not an answer: it is kept in the value and drawn as a literal
+`
+` - one row cannot show a line break, and the caret counts the two columns it occupies - so a
+multi-line paste lands whole in one field instead of submitting part of itself and spilling the
+rest into the next prompt. A carriage return is dropped, so CRLF draws once. Only a newline the
+burst ends on submits, which is what typing Enter is.
 | Enter     | accepts the answer             |
 | Esc       | cancels, returns `$null`       |
 

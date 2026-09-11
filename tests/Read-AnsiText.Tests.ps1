@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 # Read-AnsiText.Tests.ps1
@@ -22,8 +22,16 @@ BeforeAll {
 
             Set-Item function:script:Test-AnsiInteractive -Value { $script:AnsiInteractive }
             Set-Item function:script:Test-AnsiNoColor -Value { $script:AnsiTestNoColor }
-            Set-Item function:script:Test-AnsiKeyAvailable -Value { $script:AnsiKeyIndex -lt $script:AnsiKeys.Count }
+            # A real console empties when the typist stops, and the prompt leans on that to tell
+            # a pasted newline from an answered one. The string 'BOUNDARY' in the key list is that
+            # pause: the buffer reads as empty there, and the next read steps over it.
+            Set-Item function:script:Test-AnsiKeyAvailable -Value {
+                if ($script:AnsiKeyIndex -ge $script:AnsiKeys.Count) { return $false }
+                return ($script:AnsiKeys[$script:AnsiKeyIndex] -isnot [string])
+            }
             Set-Item function:script:Read-AnsiKeyInfo -Value {
+                while ($script:AnsiKeyIndex -lt $script:AnsiKeys.Count -and
+                    $script:AnsiKeys[$script:AnsiKeyIndex] -is [string]) { $script:AnsiKeyIndex++ }
                 if ($script:AnsiKeyIndex -ge $script:AnsiKeys.Count) { return $null }
                 $key = $script:AnsiKeys[$script:AnsiKeyIndex]
                 $script:AnsiKeyIndex++
@@ -57,6 +65,8 @@ BeforeAll {
             'Enter' { $null = $keys.Add((New-TestKey -Char "`r" -Key ([System.ConsoleKey]::Enter))) }
             'Escape' { $null = $keys.Add((New-TestKey -Char ([char]27) -Key ([System.ConsoleKey]::Escape))) }
         }
+        # The typist stops here: what follows belongs to the next prompt, not to this burst.
+        $null = $keys.Add('BOUNDARY')
         return , $keys.ToArray()
     }
 
@@ -188,6 +198,28 @@ Describe 'Read-AnsiText — defaults and empty answers' {
         $result = Invoke-Prompt { Read-AnsiText 'Name' }
         $result.Value | Should -BeExactly 'ansi'
         (Remove-Ansi $result.Painted) | Should -Match 'An answer is required\.'
+    }
+}
+
+Describe 'Read-AnsiText — pasted newlines' {
+    It 'keeps a newline inside a paste in the answer, rather than submitting on it' {
+        Set-AnsiTestKeys -Module Read-AnsiText -Keys @(
+            (New-TestKey -Char '1'), (New-TestKey -Char '2')
+            (New-TestKey -Key ([System.ConsoleKey]::Enter))
+            (New-TestKey -Char 'a'), (New-TestKey -Char 'b')
+            (New-TestKey -Key ([System.ConsoleKey]::Enter))
+        )
+        $result = Invoke-Prompt { Read-AnsiText 'Paste' }
+        $result.Value | Should -BeExactly "12`nab"
+    }
+
+    It 'still answers on the newline the paste ends with' {
+        Set-AnsiTestKeys -Module Read-AnsiText -Keys @(
+            (New-TestKey -Char 'x')
+            (New-TestKey -Key ([System.ConsoleKey]::Enter))
+        )
+        $result = Invoke-Prompt { Read-AnsiText 'Paste' }
+        $result.Value | Should -BeExactly 'x'
     }
 }
 

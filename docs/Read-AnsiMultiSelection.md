@@ -15,6 +15,7 @@ Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
                        [-LabelProperty <string>]
                        [-Grouped] [-GroupLabelProperty <string>] [-GroupChoicesProperty <string>]
                        [-ToggleGroups] [-Selected <object[]>]
+                       [-Overflow <Fold|Crop|Ellipsis>]
                        [-CursorColor <string>] [-TitleColor <string>] [-ChoiceColor <string>]
                        [-GroupColor <string>] [-MarkColor <string>] [-HintColor <string>]
                        [-PageSize <int>] [-Required] [-RequiredMessage <string>]
@@ -44,6 +45,8 @@ Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
 | `-Required`        | off                          | Refuse Enter while nothing is ticked.                                        |
 | `-RequiredMessage` | `Select at least one item.`  | Written when `-Required` refuses.                                            |
 | `-RequiredColor`   | `BrightRed`                  | Colour of that message.                                                      |
+| `-Overflow`       | `Fold`         | What a choice too long for the console does: fold under its own first character, crop, or ellipsise. A hard `` `n `` in a label always breaks, and each of those lines folds in turn. |
+| `-Row`, `-Column` | *cursor*      | Paint the list at that cell, 0-based and required together, as one synchronized frame. Omit both and it lands where the cursor is, as before. |
 | `-TimeoutSeconds`  | `0`                          | Give up after N seconds and return `$null`.                                  |
 
 ## Keys

@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 # Read-AnsiPause.psm1
 # Public: Read-AnsiPause — wait for a key (or Enter) before carrying on.
@@ -6,6 +6,7 @@
 # Depends on Ansi.Core.psm1 for markup, colour, cursor control, and input seams.
 
 Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Ansi.Input.psm1') -Force -DisableNameChecking
 
 function Read-AnsiPause {
     [CmdletBinding()]
@@ -33,6 +34,10 @@ function Read-AnsiPause {
 
         [switch]$Markdown,
 
+        [int]$Row = -1,
+
+        [int]$Column = -1,
+
         [switch]$Escape
     )
 
@@ -55,7 +60,8 @@ function Read-AnsiPause {
     	try {
         while ($true) {
             Write-AnsiPauseMessage -Message $Message -Fg $messageFg -Deadline $deadline `
-                -ShowCountdown:$ShowCountdown -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape
+                -ShowCountdown:$ShowCountdown -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape `
+                -Row $Row -Column $Column
 
             if ($null -ne $deadline) {
                 $timedOut = $false
@@ -101,7 +107,9 @@ function Write-AnsiPauseMessage {
         [switch]$ShowCountdown,
         [switch]$NoColor,
         [switch]$Markdown,
-        [switch]$Escape
+        [switch]$Escape,
+        [int]$Row = -1,
+        [int]$Column = -1
     )
     $runs = [System.Collections.Generic.List[object]]::new()
 
@@ -121,7 +129,12 @@ function Write-AnsiPauseMessage {
     }
 
     Clear-AnsiLine
-    Write-Host (Format-AnsiLine -Runs $runs.ToArray() -Width 0 -Justify Left -NoColor:$NoColor) -NoNewline
+    $line = Format-AnsiLine -Runs $runs.ToArray() -Width 0 -Justify Left -NoColor:$NoColor
+    if (Test-AnsiPositioned -Row $Row -Column $Column) {
+        $null = Write-AnsiPromptFrame -Rows @($line) -Row $Row -Column $Column
+    } else {
+        Write-Host $line -NoNewline
+    }
 }
 
 function New-AnsiPauseRun {

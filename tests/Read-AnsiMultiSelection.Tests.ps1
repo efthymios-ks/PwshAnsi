@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 # Read-AnsiMultiSelection.Tests.ps1
@@ -340,14 +340,23 @@ Describe 'Read-AnsiMultiSelection — groups, -ToggleGroups' {
         @($result.Value) | Should -Be @('lemon', 'lime')
     }
 
-    It 'shows a part-ticked group as [-] and completes it on space' {
+    It 'completes a part-ticked group on space' {
         Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @(
             (New-Key -Key DownArrow), (New-Key -Key Spacebar), (New-Key -Key UpArrow)
             (New-Key -Key Spacebar), (New-Key -Key Enter)
         )
         $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }
-        (Get-PlainRows -Result $result) | Should -Match ([regex]::Escape('[-] Berries'))
         @($result.Value) | Should -Be @('strawberry', 'raspberry')
+    }
+
+    It 'shows a part-ticked group as [-]' {
+        # Painted once per key burst, so the partial state is asserted from where it is drawn -
+        # a group that starts with one member ticked - rather than from a frame between keys.
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups -Selected 'strawberry'
+        }
+        (Get-PlainRows -Result $result) | Should -Match ([regex]::Escape('[-] Berries'))
     }
 
     It 'reports a full group from -Selected' {

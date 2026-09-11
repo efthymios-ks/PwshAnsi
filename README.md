@@ -26,6 +26,7 @@ a renderable; `Out-AnsiHost` paints it, `Out-AnsiString` turns it into strings.
 - [`Read-AnsiSelection`](docs/Read-AnsiSelection.md) — pick one item with the arrow keys, flat or under view-only group headers
 - [`Read-AnsiMultiSelection`](docs/Read-AnsiMultiSelection.md) — tick several items, with group headers that tick a group whole
 - [`Read-AnsiPause`](docs/Read-AnsiPause.md) — wait for a key before carrying on
+- `Ansi.Input` *(internal)* — shared input layer the prompts use: key burst grouping, field state and caret, positioned frame rendering
 - [`Invoke-AnsiTask`](docs/Invoke-AnsiTask.md) — run steps behind live text and a progress bar
 - [`Start-AnsiTitleAnimation`](docs/Start-AnsiTitleAnimation.md) — turn the braille dots in the window title while a job runs
 
@@ -187,9 +188,9 @@ pwsh -File .\demo\Demo-AnsiException.ps1
 pwsh -File .\demo\Demo-AnsiProgress.ps1
 pwsh -File .\demo\Demo-AnsiBarChart.ps1
 pwsh -File .\demo\Demo-AnsiBreakdownChart.ps1
-pwsh -File .\demo\Demo-AnsiEmoji.ps1             # every :name:, as one matrix
-pwsh -File .\demo\Demo-AnsiTask.ps1              # redraws in place
-pwsh -File .\demo\Demo-AnsiTitleAnimation.ps1   # watch the window title
+pwsh -File .\demo\Demo-AnsiEmoji.ps1
+pwsh -File .\demo\Demo-AnsiTask.ps1
+pwsh -File .\demo\Demo-AnsiTitleAnimation.ps1
 ```
 
 The prompt demos wait for your keys:
@@ -200,7 +201,33 @@ pwsh -File .\demo\Demo-ReadAnsiConfirm.ps1
 pwsh -File .\demo\Demo-ReadAnsiSelection.ps1
 pwsh -File .\demo\Demo-ReadAnsiMultiSelection.ps1
 pwsh -File .\demo\Demo-ReadAnsiPause.ps1
+pwsh -File .\demo\Demo-AnsiInput.ps1
 ```
+
+## How the prompts read keys
+
+All `Read-Ansi*` prompts share a single input layer (`src/Ansi.Input.psm1`) rather than each
+rolling their own key loop.
+
+**Key burst grouping.** `Read-AnsiKeyBurst` blocks for the first key and then drains whatever
+is already queued. A paste arrives as a burst; the prompt applies every key in order and repaints
+once, so a pasted path does not stutter. The burst limit caps at 512 keys before a forced repaint,
+so a very long paste becomes two bursts rather than one frozen frame.
+
+**Field state.** `New-AnsiFieldState` and `Update-AnsiFieldState` track the text, the caret
+position, and the scroll window. `Get-AnsiFieldView` returns the slice that fits the visible
+width and the caret column within that slice, so the caret stays on screen regardless of how
+wide the text grows. Pasted line breaks are kept in the value and drawn as `\n` (two columns),
+so a multi-line paste lands whole in one field.
+
+**Positioned rendering.** `Write-AnsiPromptFrame` can paint at an arbitrary cell (the `-Row` and
+`-Column` parameters on each prompt) as a single synchronized write rather than walking the cursor
+up line by line. `Set-AnsiPromptCursor` places the caret back after each frame, because a
+synchronized write restores the caller's cursor position.
+
+**Testable seams.** The console calls (`ReadKey`, `KeyAvailable`, `Wait`) are passed in as
+scriptblocks rather than called directly. The test suite replaces them in the module scope, so a
+scripted key list drives every prompt — no keyboard, no waiting.
 
 ## Build and publish
 

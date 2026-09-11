@@ -58,9 +58,12 @@ frame — the thing that reads as flicker. In order, the frame:
 1. saves the caller's cursor (`ESC 7`) and hides it (`ESC[?25l`),
 2. opens a synchronized update (`ESC[?2026h`) — terminals that know it present the
    frame atomically, the rest ignore the pair,
-3. positions each row absolutely (`ESC[<row>;<col>H`) and erases to the end of the
-   line (`ESC[K`) — nothing is cleared first, since a clear is the flash, and a row
-   that shrank leaves nothing of the last frame behind,
+3. positions each row absolutely (`ESC[<row>;<col>H`), erases to the end of the line
+   (`ESC[K`) and then writes the row — so a row that shrank leaves nothing of the last
+   frame behind. The erase leads rather than trails: a row that fills the line leaves
+   the cursor in the terminal's pending-wrap state, and an `EL` issued from there wipes
+   the cell just written. Inside the synchronized update neither order is visible as a
+   clear, so the safe one is the one used,
 4. closes the update, shows the cursor, and restores it (`ESC 8`), so a script can
    keep writing normally around the frame.
 

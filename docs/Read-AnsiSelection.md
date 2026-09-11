@@ -13,6 +13,7 @@ rows throughout.
 Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
                   [-LabelProperty <string>]
                   [-Grouped] [-GroupLabelProperty <string>] [-GroupChoicesProperty <string>]
+                  [-Overflow <Fold|Crop|Ellipsis>]
                   [-CursorColor <string>] [-TitleColor <string>] [-ChoiceColor <string>]
                   [-GroupColor <string>] [-HintColor <string>] [-PageSize <int>]
                   [-TimeoutSeconds <int>] [-Markdown] [-Escape]
@@ -34,6 +35,8 @@ Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
 | `-GroupColor`     | none           | Colour of the group headers. They are bold either way.                          |
 | `-HintColor`      | `BrightBlack`  | Colour of the key hint and the position counter.                                 |
 | `-PageSize`       | `10`           | Rows shown at once; the window scrolls with the cursor.                          |
+| `-Overflow`       | `Fold`         | What a choice too long for the console does: fold under its own first character, crop, or ellipsise. A hard `` `n `` in a label always breaks, and each of those lines folds in turn. |
+| `-Row`, `-Column` | *cursor*      | Paint the list at that cell, 0-based and required together, as one synchronized frame. Omit both and it lands where the cursor is, as before. |
 | `-TimeoutSeconds` | `0`            | Give up after N seconds and return `$null`.                                     |
 
 ## Keys

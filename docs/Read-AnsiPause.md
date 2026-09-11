@@ -22,6 +22,7 @@ Read-AnsiPause [[-Message] <string>] [-Enter] [-MessageColor <string>]
 | `-Message`        | `Press any key to continue`        | The row to show. `-Prompt` aliases it. Parsed as markup; `-Markdown` adds sugar, `-Escape` turns parsing off. |
 | `-Enter`          | off                                | Wait for Enter specifically; other keys are ignored. Default message becomes `Press enter to continue`. |
 | `-MessageColor`   | `BrightBlack`                      | Colour of the message. `-Color` aliases it. Markup inside the message wins.  |
+| `-Row`, `-Column` | *cursor*      | Paint the message at that cell, 0-based and required together. Omit both and it lands where the cursor is. |
 | `-TimeoutSeconds` | `0` (wait forever)                 | Give up after N seconds and return `$null`.                                 |
 | `-ShowCountdown`  | off                                | Append the seconds left, ticking in place. Needs `-TimeoutSeconds`.          |
 | `-KeepMessage`    | off                                | Leave the message on screen instead of erasing it.                           |

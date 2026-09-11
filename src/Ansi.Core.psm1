@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 # Ansi.Core.psm1
 # Internal helpers shared across PwshAnsi component modules.
@@ -375,6 +375,47 @@ function Split-AnsiRuns {
     return , $lines.ToArray()
 }
 
+function Split-AnsiChoiceRow {
+    # One choice, folded to the console. The prefix - cursor marker, indent, tick box - is drawn
+    # once; every continuation row is padded to its width so the text hangs under its own first
+    # character rather than under the box. Callers need the row count: a list that repaints in
+    # place moves the cursor up by the number of physical rows it wrote, and a row that wrapped
+    # on its own would leave that count short.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Prefix,
+        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Label,
+        [int]$Width = 0,
+        [ValidateSet('Fold', 'Crop', 'Ellipsis')]
+        [string]$Overflow = 'Fold'
+    )
+    if ($Width -lt 1) { $Width = (Get-AnsiAnchor).BufferWidth }
+
+    $indent = Measure-AnsiRow -Runs $Prefix
+    # A column short of the buffer: a row that fills the last cell wraps by itself and the count
+    # stops matching what is on screen.
+    $room = [Math]::Max(1, $Width - $indent - 1)
+    # No @() here: the pipeline would unroll the array of rows into a flat list of runs.
+    $folded = Split-AnsiRuns -Runs $Label -Width $room -Overflow $Overflow
+    # Crop and Ellipsis promise one row per choice, and a hard break in the label would
+    # otherwise smuggle in a second.
+    if ($Overflow -ne 'Fold' -and @($folded).Count -gt 1) { $folded = , @($folded)[0] }
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    for ($i = 0; $i -lt $folded.Count; $i++) {
+        $line = [System.Collections.Generic.List[object]]::new()
+        if ($i -eq 0) {
+            foreach ($run in $Prefix) { $null = $line.Add($run) }
+        }
+        elseif ($indent -gt 0) {
+            $null = $line.Add((New-AnsiRun -Text (' ' * $indent) -Fg $null))
+        }
+        foreach ($run in $folded[$i]) { $null = $line.Add($run) }
+        $null = $rows.Add($line.ToArray())
+    }
+    return , $rows.ToArray()
+}
+
 function Format-AnsiLine {
     [CmdletBinding()]
     param(
@@ -548,8 +589,10 @@ function Format-AnsiFrame {
             [void]$frame.Append($text).Append([System.Environment]::NewLine)
             continue
         }
-        # CUP is 1-based; -Row and -Column are not.
-        [void]$frame.Append("$esc[$($Row + $i + 1);$($Column + 1)H").Append($text).Append("$esc[K")
+        # CUP is 1-based; -Row and -Column are not. The erase comes before the text, not after:
+        # a row that fills the line leaves the cursor in the terminal's pending-wrap state, and an
+        # EL issued from there erases the cell just written - the last character of the row.
+        [void]$frame.Append("$esc[$($Row + $i + 1);$($Column + 1)H").Append("$esc[K").Append($text)
     }
 
     if (-not $Plain) {
@@ -1051,6 +1094,7 @@ Add-AnsiJustify,
 New-AnsiRendering,
 Test-AnsiRendering,
 Measure-AnsiRow,
+Split-AnsiChoiceRow,
 Get-AnsiRenderingBlock,
 New-AnsiRun,
 Test-AnsiNumber,

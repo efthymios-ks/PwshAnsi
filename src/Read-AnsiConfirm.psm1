@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 # Read-AnsiConfirm.psm1
 # Public: Read-AnsiConfirm — ask a yes/no question and return a [bool].
@@ -6,6 +6,7 @@
 # Depends on Ansi.Core.psm1 for markup, colour, and the console input seams.
 
 Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Ansi.Input.psm1') -Force -DisableNameChecking
 
 function Read-AnsiConfirm {
     [CmdletBinding()]
@@ -38,6 +39,10 @@ function Read-AnsiConfirm {
 
         [switch]$Markdown,
 
+        [int]$Row = -1,
+
+        [int]$Column = -1,
+
         [switch]$Escape
     )
 
@@ -57,7 +62,7 @@ function Read-AnsiConfirm {
     if ($null -ne $Default) { $choices = if ($Default) { '[Y/n]' } else { '[y/N]' } }
 
     Write-AnsiConfirmPrompt -Prompt $Prompt -PromptFg $promptFg -Choices $choices -ChoiceFg $choiceFg `
-        -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape
+        -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape -Row $Row -Column $Column
 
     $answer = $null
     $deadline = if ($TimeoutSeconds -gt 0) { [datetime]::UtcNow.AddSeconds($TimeoutSeconds) } else { $null }
@@ -128,7 +133,9 @@ function Write-AnsiConfirmPrompt {
         [AllowNull()][string]$ChoiceFg,
         [switch]$NoColor,
         [switch]$Markdown,
-        [switch]$Escape
+        [switch]$Escape,
+        [int]$Row = -1,
+        [int]$Column = -1
     )
     $runs = [System.Collections.Generic.List[object]]::new()
 
@@ -145,7 +152,14 @@ function Write-AnsiConfirmPrompt {
     $null = $runs.Add((New-AnsiConfirmRun -Text (' ' + $Choices) -Fg $ChoiceFg))
     $null = $runs.Add((New-AnsiConfirmRun -Text ': ' -Fg $PromptFg))
 
-    Write-Host (Format-AnsiLine -Runs $runs.ToArray() -Width 0 -Justify Left -NoColor:$NoColor) -NoNewline
+    $line = Format-AnsiLine -Runs $runs.ToArray() -Width 0 -Justify Left -NoColor:$NoColor
+    if (Test-AnsiPositioned -Row $Row -Column $Column) {
+        # Placed: one synchronized write, and the answer is echoed after it by the caller.
+        $null = Write-AnsiPromptFrame -Rows @($line) -Row $Row -Column $Column
+        Set-AnsiPromptCursor -Row $Row -Column ($Column + (Measure-AnsiRow -Runs $runs.ToArray()))
+    } else {
+        Write-Host $line -NoNewline
+    }
 }
 
 function Write-AnsiConfirmNote {

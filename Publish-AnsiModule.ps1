@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 <#
 .SYNOPSIS
@@ -95,11 +95,12 @@ if ($Version -match '^(?<base>\d+\.\d+\.\d+)-(?<pre>[A-Za-z0-9.]+)$') {
 # Concatenation order. Core first: a class-free script still has to define helpers
 # before the functions that call them run, and the writers are used by nothing at
 # load time but read best next to Core.
-$script:InternalModule = @('Ansi.Core.psm1', 'Ansi.Emoji.psm1')
+$script:InternalModule = @('Ansi.Core.psm1', 'Ansi.Emoji.psm1', 'Ansi.Input.psm1')
 
 $script:BuildOrder = @(
     'Ansi.Emoji.psm1'
     'Ansi.Core.psm1'
+    'Ansi.Input.psm1'
     'Assert-AnsiPrerequisites.psm1'
     'Out-AnsiHost.psm1'
     'Out-AnsiString.psm1'

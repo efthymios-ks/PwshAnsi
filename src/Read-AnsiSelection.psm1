@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 # Read-AnsiSelection.psm1
 # Public: Read-AnsiSelection — pick one item from a list with the arrow keys.
@@ -8,6 +8,7 @@
 # Depends on Ansi.Core.psm1 for markup, colour, cursor control, and input seams.
 
 Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Ansi.Input.psm1') -Force -DisableNameChecking
 
 function Read-AnsiSelection {
     [CmdletBinding()]
@@ -45,6 +46,13 @@ function Read-AnsiSelection {
 
         [ValidateRange(0, [int]::MaxValue)]
         [int]$TimeoutSeconds = 0,
+
+        [ValidateSet('Fold', 'Crop', 'Ellipsis')]
+        [string]$Overflow = 'Fold',
+
+        [int]$Row = -1,
+
+        [int]$Column = -1,
 
         [switch]$Markdown,
 
@@ -92,26 +100,31 @@ function Read-AnsiSelection {
 
         # Nothing is typed here, and a list that repaints under a blinking cursor
         # reads as flicker. Put back whatever the caller had on the way out.
+        # Defined here so they bind to this module's seams, which is what the tests replace.
+        $readKey = { Read-AnsiKeyInfo }
+        $keyAvailable = { Test-AnsiKeyAvailable }
+        $wait = { Start-AnsiWait }
+        $stopOn = { param($k) [string]$k.Key -in @('Enter', 'Escape') }
+
         $cursor = Hide-AnsiCursor
         try {
             while ($true) {
-                $drawn = Write-AnsiSelectionList -Title $Title -TitleFg $titleFg -Items $items -Index $index `
+                $rows = Get-AnsiSelectionRows -Title $Title -TitleFg $titleFg -Items $items -Index $index `
                     -Window $window -CursorFg $cursorFg -HintFg $hintFg -NoColor:$noColor `
                     -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
-                    -Markdown:$Markdown -Escape:$Escape -Redraw ($drawn -gt 0) -Drawn $drawn
+                    -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
+                $drawn = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
 
-                if ($null -ne $deadline) {
-                    $timedOut = $false
-                    while (-not (Test-AnsiKeyAvailable)) {
-                        if ([datetime]::UtcNow -ge $deadline) { $timedOut = $true; break }
-                        Start-AnsiWait
-                    }
-                    if ($timedOut) { return $null }
-                }
+                $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable `
+                    -Wait $wait -StopOn $stopOn
+                if ($null -eq $burst -or @($burst).Count -eq 0) { return $null }
 
-                $key = Read-AnsiKeyInfo
-                if ($null -eq $key) { return $null }
+                # The burst is applied in order, then painted once - but a key that decides has to
+                # show the row it landed on before the prompt goes away.
+                $decided = $false
+                $answer = $null
 
+                foreach ($key in @($burst)) {
                 switch ($key.Key) {
                     'UpArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
                     'DownArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
@@ -125,8 +138,8 @@ function Read-AnsiSelection {
                         $index = Get-AnsiChoiceFocusNear -Focus $focus -Direction 1 `
                             -Target ([Math]::Min($items.Count - 1, $index + $window.Size))
                     }
-                    'Enter' { return $items[$index].Item }
-                    'Escape' { return $null }
+                    'Enter' { $decided = $true; $answer = $items[$index].Item }
+                    'Escape' { $decided = $true; $answer = $null }
                     default {
                         # k/j move too, for anyone who lives in vi.
                         switch ([char]::ToLowerInvariant($key.KeyChar)) {
@@ -137,6 +150,17 @@ function Read-AnsiSelection {
                 }
 
                 $window = Get-AnsiChoiceWindow -Index $index -Count $items.Count -PageSize $PageSize -Start $window.Start
+                if ($decided) { break }
+                }
+
+                if ($decided) {
+                    $rows = Get-AnsiSelectionRows -Title $Title -TitleFg $titleFg -Items $items -Index $index `
+                        -Window $window -CursorFg $cursorFg -HintFg $hintFg -NoColor:$noColor `
+                        -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
+                        -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
+                    $null = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
+                    return $answer
+                }
             }
         } finally {
             Restore-AnsiCursor -State $cursor
@@ -146,7 +170,7 @@ function Read-AnsiSelection {
 
 # Draws title, the visible slice, and a hint row; returns how many rows it wrote so
 # the next pass can move back up over them.
-function Write-AnsiSelectionList {
+function Get-AnsiSelectionRows {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Title,
@@ -161,25 +185,23 @@ function Write-AnsiSelectionList {
         [switch]$NoColor,
         [switch]$Markdown,
         [switch]$Escape,
-        [bool]$Redraw = $false,
-        [int]$Drawn = 0
+        [string]$Overflow = 'Fold'
     )
-    if ($Redraw) { Move-AnsiCursorUp -Lines $Drawn }
+    # Rows out, not painted: the caller decides whether they land at the cursor or at a cell.
+    $rows = [System.Collections.Generic.List[string]]::new()
 
-    $rows = 0
-
-    Clear-AnsiLine
-    Write-Host (Format-AnsiLine -Runs (Get-AnsiSelectionTitleRuns -Title $Title -Fg $TitleFg `
-                -Markdown:$Markdown -Escape:$Escape) -Width 0 -Justify Left -NoColor:$NoColor)
-    $rows++
+    $null = $rows.Add((Format-AnsiLine -Runs (Get-AnsiSelectionTitleRuns -Title $Title -Fg $TitleFg `
+                -Markdown:$Markdown -Escape:$Escape) -Width 0 -Justify Left -NoColor:$NoColor))
 
     for ($i = $Window.Start; $i -le $Window.End -and $i -lt $Items.Count; $i++) {
-        $runs = [System.Collections.Generic.List[object]]::new()
+        $prefix = [System.Collections.Generic.List[object]]::new()
         $marker = if ($i -eq $Index) { [string][char]0x203A + ' ' } else { '  ' }   # ›
-        $null = $runs.Add((New-AnsiSelectionRun -Text $marker -Fg $CursorFg))
+        $null = $prefix.Add((New-AnsiSelectionRun -Text $marker -Fg $CursorFg))
         if ($Items[$i].Depth -gt 0) {
-            $null = $runs.Add((New-AnsiSelectionRun -Text ('  ' * $Items[$i].Depth) -Fg $null))
+            $null = $prefix.Add((New-AnsiSelectionRun -Text ('  ' * $Items[$i].Depth) -Fg $null))
         }
+
+        $label = [System.Collections.Generic.List[object]]::new()
         foreach ($r in $Items[$i].Runs) {
             $copy = $r
             if ($i -eq $Index -and -not $r.Fg) {
@@ -187,22 +209,21 @@ function Write-AnsiSelectionList {
                     Text = $r.Text; Fg = $CursorFg; Bg = $r.Bg; Styles = $r.Styles; Link = $r.Link
                 }
             }
-            $null = $runs.Add($copy)
+            $null = $label.Add($copy)
         }
-        Clear-AnsiLine
-        Write-Host (Format-AnsiLine -Runs $runs.ToArray() -Width 0 -Justify Left -NoColor:$NoColor)
-        $rows++
+
+        foreach ($line in (Split-AnsiChoiceRow -Prefix $prefix.ToArray() -Label $label.ToArray() -Overflow $Overflow)) {
+            $null = $rows.Add((Format-AnsiLine -Runs $line -Width 0 -Justify Left -NoColor:$NoColor))
+        }
     }
 
     $hint = ($Items.Count -gt $Window.Size) `
         ? "$Ordinal/$Total  ↑↓ move · enter select · esc cancel" `
         : '↑↓ move · enter select · esc cancel'
-    Clear-AnsiLine
-    Write-Host (Format-AnsiLine -Runs @((New-AnsiSelectionRun -Text $hint -Fg $HintFg)) `
-            -Width 0 -Justify Left -NoColor:$NoColor)
-    $rows++
+    $null = $rows.Add((Format-AnsiLine -Runs @((New-AnsiSelectionRun -Text $hint -Fg $HintFg)) `
+                -Width 0 -Justify Left -NoColor:$NoColor))
 
-    return $rows
+    return , $rows.ToArray()
 }
 
 function Get-AnsiSelectionTitleRuns {

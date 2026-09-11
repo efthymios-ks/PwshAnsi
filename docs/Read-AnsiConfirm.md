@@ -28,6 +28,7 @@ Read-AnsiConfirm [-Prompt] <string> [-Default <bool>]
 | `-ChoiceColor`    | `BrightBlack` | Colour of the `[Y/n]` hint.                                                                  |
 | `-SuccessColor`   | `BrightGreen` | Colour of `-SuccessMessage`.                                                                 |
 | `-FailureColor`   | `BrightRed`   | Colour of `-FailureMessage`.                                                                 |
+| `-Row`, `-Column` | *cursor*      | Paint the question at that cell, 0-based and required together. Omit both and it lands where the cursor is. |
 | `-TimeoutSeconds` | `0`           | Give up after N seconds and return `$null`.                                                  |
 
 ## Keys

@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+﻿#Requires -Version 7.2
 
 # Read-AnsiText.psm1
 # Public: Read-AnsiText — prompt for a line of text and return it.
@@ -7,6 +7,7 @@
 # Depends on Ansi.Core.psm1 for markup, colour, and the console input seams.
 
 Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Ansi.Input.psm1') -Force -DisableNameChecking
 
 function Read-AnsiText {
     [CmdletBinding()]
@@ -130,10 +131,11 @@ function Write-AnsiPromptNote {
     Write-Host (Format-AnsiLine -Runs $runs -Width 0 -Justify Left -NoColor:$NoColor)
 }
 
-# Read one line of keys, echoing as it goes. Returns Value plus why it stopped, so
-# callers can tell an empty answer from a cancelled or timed-out one. It lives here
-# rather than in Ansi.Core so the console seams resolve in this module's scope —
-# which is what tests replace.
+# One line of keys against a field model: the caret moves, text is inserted and deleted
+# where it sits, and a field too narrow for its text scrolls sideways. Returns Value plus
+# why it stopped, so callers can tell an empty answer from a cancelled or timed-out one.
+# It lives here rather than in Ansi.Core so the console seams resolve in this module's
+# scope - which is what tests replace.
 function Read-AnsiKeyLine {
     [CmdletBinding()]
     param(
@@ -142,8 +144,14 @@ function Read-AnsiKeyLine {
         [int]$TimeoutSeconds = 0,
         [switch]$NoColor
     )
-    $buffer = [System.Text.StringBuilder]::new()
+    $state = New-AnsiFieldState
     $deadline = if ($TimeoutSeconds -gt 0) { [datetime]::UtcNow.AddSeconds($TimeoutSeconds) } else { $null }
+
+    # Defined here so they bind to this module's seams, which is what the tests replace.
+    $readKey = { Read-AnsiKeyInfo }
+    $keyAvailable = { Test-AnsiKeyAvailable }
+    $wait = { Start-AnsiWait }
+    $stopOn = { param($k) [string]$k.Key -eq 'Escape' }
 
     $prefix = ''
     $suffix = ''
@@ -152,49 +160,80 @@ function Read-AnsiKeyLine {
         $suffix = $PSStyle.Reset
     }
 
+    # A real terminal gets the field repainted in place, which is what makes the caret and the
+    # sideways scroll possible. Anywhere else - a captured or redirected host - there is nothing
+    # to position against, so the answer is echoed as it grows, exactly as it always was.
+    $row = -1
+    $column = -1
+    $width = 0
+    $positioned = Test-AnsiTerminal
+    if ($positioned) {
+        try {
+            $row = [Console]::CursorTop
+            $column = [Console]::CursorLeft
+            $width = [Math]::Max(1, [Console]::BufferWidth - $column - 1)
+        } catch { $positioned = $false }
+    }
+
+    $paint = {
+        $view = Get-AnsiFieldView -State $state -Width $width
+        $state.Window = $view.Window
+        $shown = $Mask ? ('*' * $view.Visible.Length) : $view.Visible
+        try {
+            [Console]::SetCursorPosition($column, $row)
+            Write-Host ($prefix + $shown + $suffix + (' ' * [Math]::Max(0, $width - $shown.Length))) -NoNewline
+            [Console]::SetCursorPosition($column + $view.CaretColumn, $row)
+        } catch { }
+    }
+
     # This one is typed into: the cursor has to be visible to type against.
     $cursor = Show-AnsiCursor
-    	try {
+    try {
         while ($true) {
-            if ($null -ne $deadline) {
-                while (-not (Test-AnsiKeyAvailable)) {
-                    if ([datetime]::UtcNow -ge $deadline) {
-                        return [PSCustomObject]@{ Value = $buffer.ToString(); TimedOut = $true; Cancelled = $false }
+            $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable -Wait $wait -StopOn $stopOn
+            # Nothing at all means the input ended: a timeout, or a host with no more keys.
+            if ($null -eq $burst -or @($burst).Count -eq 0) {
+                return [PSCustomObject]@{ Value = $state.Text; TimedOut = $true; Cancelled = $false }
+            }
+
+            $keys = @($burst)
+            for ($i = 0; $i -lt $keys.Count; $i++) {
+                $key = $keys[$i]
+                if ($null -eq $key) {
+                    return [PSCustomObject]@{ Value = $state.Text; TimedOut = $true; Cancelled = $false }
+                }
+
+                # A newline in the middle of a burst came from a paste, not from a finger: it is
+                # kept in the answer and drawn as an escape. Only a newline the burst ends on is
+                # someone answering, and that one submits.
+                $submits = ([string]$key.Key -eq 'Enter' -and $i -eq $keys.Count - 1)
+
+                if ($submits -or [string]$key.Key -eq 'Escape') {
+                    if ($positioned) { & $paint }
+                    Write-Host ''
+                    return [PSCustomObject]@{
+                        Value     = $state.Text
+                        TimedOut  = $false
+                        Cancelled = ([string]$key.Key -eq 'Escape')
                     }
-                    Start-AnsiWait
                 }
-            }
 
-            $key = Read-AnsiKeyInfo
-            if ($null -eq $key) {
-                return [PSCustomObject]@{ Value = $buffer.ToString(); TimedOut = $true; Cancelled = $false }
-            }
+                $before = $state
+                $state = Update-AnsiFieldState -State $state -Key $key
 
-            switch ($key.Key) {
-                'Enter' {
-                    Write-Host ''
-                    return [PSCustomObject]@{ Value = $buffer.ToString(); TimedOut = $false; Cancelled = $false }
-                }
-                'Escape' {
-                    Write-Host ''
-                    return [PSCustomObject]@{ Value = $buffer.ToString(); TimedOut = $false; Cancelled = $true }
-                }
-                'Backspace' {
-                    if ($buffer.Length -gt 0) {
-                        $null = $buffer.Remove($buffer.Length - 1, 1)
+                if (-not $positioned) {
+                    # No cursor to move: echo the one character that grew, or rub out the one
+                    # that went. Caret moves and mid-text edits simply have nothing to show.
+                    if ($state.Text.Length -gt $before.Text.Length) {
+                        $echo = $Mask ? '*' : [string]$key.KeyChar
+                        Write-Host ($prefix + $echo + $suffix) -NoNewline
+                    } elseif ($state.Text.Length -lt $before.Text.Length) {
                         Write-Host "`b `b" -NoNewline
                     }
-                    continue
-                }
-                default {
-                    $char = $key.KeyChar
-                    if ([char]::IsControl($char)) { continue }
-                    $null = $buffer.Append($char)
-                    $echo = if ($Mask) { '*' } else { [string]$char }
-                    Write-Host ($prefix + $echo + $suffix) -NoNewline
-                    continue
                 }
             }
+
+            if ($positioned) { & $paint }
         }
     } finally {
         Restore-AnsiCursor -State $cursor
