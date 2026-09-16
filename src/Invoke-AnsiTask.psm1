@@ -12,8 +12,10 @@
 #     ████████████████████░░░░░░░░░░   2/3   67%
 #
 # -Show picks what you get: Text (a line per step), Bar (one bar, redrawn), or Both.
+# -ProgressShow picks what the bar carries at its end, as Format-AnsiProgress -Show.
 # Inside a step, $task.Update(value, total) moves the bar for work the runner cannot
-# count on its own.
+# count on its own — which puts a fraction in the count ("0.5/1"), so -ProgressShow
+# Percent is usually the one to reach for there.
 #
 # When output is redirected the bar is not redrawn in place — every state would be
 # a separate line in the log. Text still prints, so a CI transcript stays readable.
@@ -52,6 +54,12 @@ function Invoke-AnsiTask {
         [ValidateSet('Both', 'Text', 'Bar')]
         [string]$Show = 'Both',
 
+        # What the bar carries at its end, as Format-AnsiProgress -Show. A step that
+        # reports a fraction makes the count a decimal ("0.5/1"), which reads worse
+        # than the percentage it is derived from, so Percent is often the better one.
+        [ValidateSet('Percent', 'Count', 'Both', 'None')]
+        [string]$ProgressShow = 'Both',
+
         [ValidateSet('Blocks', 'Line', 'Dots', 'Ascii')]
         [string]$Style = 'Blocks',
 
@@ -80,16 +88,17 @@ function Invoke-AnsiTask {
     if ($steps.Count -eq 0) { return }
 
     $state = [PSCustomObject]@{
-        Steps      = $steps
-        Index      = 0
-        Show       = $Show
-        Style      = $Style
-        Width      = $Width
-        BarColor   = $BarColor
-        EmptyColor = $EmptyColor
-        BarLines   = 0          # bar rows currently on screen, to redraw over
-        Live       = (Test-AnsiTaskLive)
-        Fraction   = 0.0        # progress inside the running step, 0..1
+        Steps        = $steps
+        Index        = 0
+        Show         = $Show
+        ProgressShow = $ProgressShow
+        Style        = $Style
+        Width        = $Width
+        BarColor     = $BarColor
+        EmptyColor   = $EmptyColor
+        BarLines     = 0        # bar rows currently on screen, to redraw over
+        Live         = (Test-AnsiTaskLive)
+        Fraction     = 0.0      # progress inside the running step, 0..1
     }
 
     $results = [System.Collections.Generic.List[object]]::new()
@@ -305,7 +314,7 @@ function Write-AnsiTaskBar {
     $value = $State.Index + $State.Fraction
     $splat = @{
         Total      = $State.Steps.Count
-        Show       = 'Both'
+        Show       = $State.ProgressShow
         Style      = $State.Style
         BarColor   = $State.BarColor
         EmptyColor = $State.EmptyColor

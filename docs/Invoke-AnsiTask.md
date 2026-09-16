@@ -29,7 +29,8 @@ write directly. The bar it draws is [`Format-AnsiProgress`](Format-AnsiProgress.
 Invoke-AnsiTask [-Name] <string> [-ScriptBlock] <scriptblock> [options]
 Invoke-AnsiTask [-Task] <object[]> [options]
 
-options: [-Show <Both|Text|Bar>] [-Style <Blocks|Line|Dots|Ascii>] [-Width <int>]
+options: [-Show <Both|Text|Bar>] [-ProgressShow <Percent|Count|Both|None>]
+         [-Style <Blocks|Line|Dots|Ascii>] [-Width <int>]
          [-BarColor <c>] [-EmptyColor <c>] [-ContinueOnError] [-KeepBar] [-PassThru]
 ```
 
@@ -39,6 +40,7 @@ options: [-Show <Both|Text|Bar>] [-Style <Blocks|Line|Dots|Ascii>] [-Width <int>
 | `-ScriptBlock`     | required      | One step's work.                                       |
 | `-Task`            | required      | Several steps: `@{ Name = ...; Script = { ... } }` each. |
 | `-Show`            | `Both`        | Lines, bar, or both.                                    |
+| `-ProgressShow`    | `Both`        | What the bar carries at its end, as [`Format-AnsiProgress -Show`](./Format-AnsiProgress.md). |
 | `-Style`           | `Blocks`      | The bar's characters.                                   |
 | `-Width`           | anchor        | The bar's width.                                        |
 | `-BarColor`        | `BrightCyan`  | The filled part of the bar.                             |
@@ -50,6 +52,14 @@ options: [-Show <Both|Text|Bar>] [-Style <Blocks|Line|Dots|Ascii>] [-Width <int>
 A step is a hashtable or an object with `Name` and `Script` (`ScriptBlock` is
 accepted too). A missing name or a `Script` that is not a scriptblock throws before
 anything runs.
+
+`$task.Update()` moves the bar inside a step, which puts a fraction in the count —
+one step reporting halfway reads `0.5/1   50%`. `-ProgressShow Percent` drops the
+count and leaves the percentage it was derived from:
+
+```powershell
+Invoke-AnsiTask 'Downloading' { param($task) ... } -ProgressShow Percent
+```
 
 ## What a step gets
 

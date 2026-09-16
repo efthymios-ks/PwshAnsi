@@ -62,6 +62,16 @@ Invoke-AnsiTask 'Copying 40 files' {
     }
 }
 
+# 5b. The same, without the fractional count $task.Update() puts in the tail
+Show-DemoHeader '5b. -ProgressShow Percent — the percentage alone, no "0.5/1"'
+Invoke-AnsiTask 'Copying 40 files' {
+    param($task)
+    foreach ($i in 1..40) {
+        Start-Sleep -Milliseconds 45
+        $task.Update($i, 40)
+    }
+} -ProgressShow Percent
+
 # 6. A step that says something as it goes
 Show-DemoHeader '6. $task.Write() — a note above the bar'
 Invoke-AnsiTask -Task @(

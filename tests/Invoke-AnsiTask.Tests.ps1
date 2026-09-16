@@ -286,6 +286,46 @@ Describe 'Invoke-AnsiTask — what it shows' {
         $out | Should -Match '3/3'
     }
 
+    It 'drops the count with -ProgressShow Percent' {
+        Set-AnsiTestLive -Value $true
+        $out = Invoke-Ansi {
+            Invoke-AnsiTask -Show Bar -KeepBar -ProgressShow Percent -Task @(
+                @{ Name = 'a'; Script = { } }
+                @{ Name = 'b'; Script = { } }
+            )
+        }
+        $out | Should -Match '100%'
+        $out | Should -Not -Match '2/2'
+    }
+
+    It 'keeps the count alone with -ProgressShow Count' {
+        Set-AnsiTestLive -Value $true
+        $out = Invoke-Ansi {
+            Invoke-AnsiTask -Show Bar -KeepBar -ProgressShow Count -Task @(
+                @{ Name = 'a'; Script = { } }
+                @{ Name = 'b'; Script = { } }
+            )
+        }
+        $out | Should -Match '2/2'
+        $out | Should -Not -Match '%'
+    }
+
+    It 'leaves the bar bare with -ProgressShow None' {
+        Set-AnsiTestLive -Value $true
+        $out = Invoke-Ansi { Invoke-AnsiTask 'build' { } -Show Bar -KeepBar -ProgressShow None }
+        $out | Should -Match ([regex]::Escape($script:Full))
+        $out | Should -Not -Match '%'
+        $out | Should -Not -Match '1/1'
+    }
+
+    It 'hides the fraction a step reports when -ProgressShow is Percent' {
+        Set-AnsiTestLive -Value $true
+        $out = Invoke-Ansi {
+            Invoke-AnsiTask 'download' { param($task) $task.Update(1, 2) } -Show Bar -KeepBar -ProgressShow Percent
+        }
+        $out | Should -Not -Match '0\.5/1'
+    }
+
     It 'draws the bar in the style it was given' {
         Set-AnsiTestLive -Value $true
         $out = Invoke-Ansi { Invoke-AnsiTask 'build' { } -Show Bar -Style Ascii -KeepBar }
