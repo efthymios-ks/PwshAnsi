@@ -47,94 +47,160 @@ For scripts that need to work on machines where PwshAnsi may not be installed, o
 launched from Windows PowerShell 5.1, paste these two functions at the top of your script:
 
 ```powershell
-function Assert-Pwsh7 {
+function Assert-Pwsh7
+{
     param([hashtable]$Arguments = @{}, [string]$ScriptPath)
 
-    if ($PSVersionTable.PSVersion.Major -ge 7) { return }
+    if ($PSVersionTable.PSVersion.Major -ge 7)
+    {
+        return
+    }
 
-    if (-not $ScriptPath) {
+    if (-not $ScriptPath)
+    {
         $ScriptPath = Get-PSCallStack |
             Select-Object -Skip 1 -ExpandProperty ScriptName -ErrorAction SilentlyContinue |
-            Where-Object { $_ -and $_ -ne $PSCommandPath } |
+            Where-Object { $_ } |
             Select-Object -First 1
     }
-    if (-not $ScriptPath -or -not (Test-Path $ScriptPath)) {
+
+    if (-not $ScriptPath -or -not (Test-Path $ScriptPath))
+    {
         throw 'Assert-Pwsh7: cannot determine the script to relaunch. Pass -ScriptPath.'
     }
 
     $findPwsh = {
-        $cmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-        if ($cmd) { return $cmd.Source }
-        foreach ($c in @(
-                (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
-                (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe')
-                (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
-            )) {
-            if ($c -and (Test-Path $c)) { return $c }
-        }
-        return $null
+        @(
+            (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+            (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
+            (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe')
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
+        ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
     }
 
     $pwshPath = & $findPwsh
-    if (-not $pwshPath) {
-        Write-Host "PowerShell 7 is required. Installing..." -ForegroundColor Yellow
-        $installed = $false
-        if (Get-Command winget -ErrorAction SilentlyContinue) {
-            winget install --id Microsoft.PowerShell --source winget --exact `
-                --accept-package-agreements --accept-source-agreements --silent
-            if ($LASTEXITCODE -eq 0 -and (& $findPwsh)) { $installed = $true }
-        }
-        if (-not $installed) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $bootstrap = Join-Path $env:TEMP 'install-powershell.ps1'
-            Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $bootstrap -UseBasicParsing
-            & $bootstrap -UseMSI -Quiet
-            Remove-Item $bootstrap -Force -ErrorAction SilentlyContinue
-        }
+
+    if (-not $pwshPath -and (Get-Command winget -ErrorAction SilentlyContinue))
+    {
+        Write-Host 'PowerShell 7 is required. Installing via winget...' -ForegroundColor Yellow
+        winget install --id Microsoft.PowerShell --source winget --exact `
+            --accept-package-agreements --accept-source-agreements --silent
         $pwshPath = & $findPwsh
-        if (-not $pwshPath) { throw 'PowerShell 7 still not found. Install it manually and re-run.' }
+    }
+
+    if (-not $pwshPath)
+    {
+        Write-Host 'PowerShell 7 is required. Installing via aka.ms/install-powershell...' -ForegroundColor Yellow
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $bootstrap = Join-Path $env:TEMP 'install-powershell.ps1'
+        Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $bootstrap -UseBasicParsing
+        & $bootstrap -UseMSI -Quiet
+        Remove-Item $bootstrap -Force -ErrorAction SilentlyContinue
+        $pwshPath = & $findPwsh
+    }
+
+    if (-not $pwshPath)
+    {
+        throw 'PowerShell 7 still not found. Install it manually and re-run.'
     }
 
     $forward = @()
-    foreach ($entry in $Arguments.GetEnumerator()) {
-        if ($entry.Value -is [switch]) {
-            if ($entry.Value.IsPresent) { $forward += "-$($entry.Key)" }
-        } elseif ($entry.Value -is [array]) {
-            $forward += "-$($entry.Key)"; $forward += ($entry.Value | ForEach-Object { [string]$_ })
-        } else {
-            $forward += "-$($entry.Key)"; $forward += [string]$entry.Value
+
+    foreach ($entry in $Arguments.GetEnumerator())
+    {
+        if ($entry.Value -is [switch] -and -not $entry.Value.IsPresent)
+        {
+            continue
         }
+
+        $forward += "-$($entry.Key)"
+
+        if ($entry.Value -is [switch])
+        {
+            continue
+        }
+
+        $forward += ($entry.Value | ForEach-Object { [string]$_ })
     }
 
     & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @forward
     exit $LASTEXITCODE
 }
 
-function Assert-PwshAnsi {
+function Assert-PwshAnsi
+{
     param([string]$Repository = 'PSGallery')
 
-    if (Get-Module PwshAnsi) { return }
+    if (Get-Module PwshAnsi)
+    {
+        return
+    }
 
-    if (-not (Get-Module PwshAnsi -ListAvailable)) {
-        Write-Host "Installing PwshAnsi from $Repository..." -ForegroundColor Yellow
-        try {
-            if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
-                Install-PSResource -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
-                    -TrustRepository -ErrorAction Stop
-            } else {
-                if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                    Install-PackageProvider -Name NuGet -Scope CurrentUser -Force -ErrorAction Stop | Out-Null
-                }
-                Install-Module -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
-                    -Force -AllowClobber -ErrorAction Stop
-            }
-        } catch {
+    $usePSResource = [bool](Get-Command Install-PSResource -ErrorAction SilentlyContinue)
+
+    $local = Get-Module PwshAnsi -ListAvailable |
+        Sort-Object Version -Descending |
+        Select-Object -First 1 -ExpandProperty Version
+
+    $remote = $null
+    try
+    {
+        if ($usePSResource)
+        {
+            $remote = (Find-PSResource -Name PwshAnsi -Repository $Repository -ErrorAction Stop | Select-Object -First 1).Version
+        }
+        else
+        {
+            $remote = (Find-Module -Name PwshAnsi -Repository $Repository -ErrorAction Stop | Select-Object -First 1).Version
+        }
+    }
+    catch
+    {
+        $remote = $null
+    }
+
+    $install = {
+        if ($usePSResource)
+        {
+            Install-PSResource -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
+                -TrustRepository -ErrorAction Stop
+            return
+        }
+
+        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue))
+        {
+            Install-PackageProvider -Name NuGet -Scope CurrentUser -Force -ErrorAction Stop | Out-Null
+        }
+
+        Install-Module -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
+            -Force -AllowClobber -ErrorAction Stop
+    }
+
+    if (-not $local -or ($remote -and [string]$remote -ne [string]$local))
+    {
+        if ($local)
+        {
+            Write-Host "Updating PwshAnsi $local -> $remote..." -ForegroundColor Yellow
+        }
+        else
+        {
+            Write-Host "Installing PwshAnsi from $Repository..." -ForegroundColor Yellow
+        }
+
+        try
+        {
+            & $install
+        }
+        catch
+        {
             throw "Could not install PwshAnsi: $($_.Exception.Message)"
         }
     }
 
     Import-Module PwshAnsi -Force -Global -ErrorAction Stop
-    if (-not (Get-Command Format-AnsiText -ErrorAction SilentlyContinue)) {
+
+    if (-not (Get-Command Format-AnsiText -ErrorAction SilentlyContinue))
+    {
         throw 'PwshAnsi imported but its commands are missing. Install it manually and re-run.'
     }
 }
