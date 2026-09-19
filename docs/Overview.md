@@ -4,7 +4,7 @@ A zero-dependency PowerShell 7.2+ terminal rendering library. Emits its own ANSI
 sources all colours from `$PSStyle`, and honours the caller's cursor position so
 wrapped or multi-row output resumes at the anchor column instead of column zero.
 
-- **Runtime:** PowerShell 7.2+ (requires `$PSStyle`)
+- **Runtime:** PowerShell 7.2+ for the full library; PowerShell 5.1 for `Assert-PwshAnsi`
 - **Dependencies:** none
 
 ## Repository layout
@@ -12,19 +12,21 @@ wrapped or multi-row output resumes at the anchor column instead of column zero.
 ```
 PwshAnsi/
 ├─ src/
+│  ├─ Assert-PwshAnsi.psm1        # public: Assert-PwshAnsi — 5.1-safe bootstrap
 │  ├─ Ansi.Emoji.psm1             # internal: the :name: emoji table
 │  ├─ Ansi.Core.psm1              # internal helpers, imported by each component
+│  ├─ Ansi.Input.psm1             # internal: shared input layer for the prompts
 │  ├─ Out-AnsiHost.psm1           # public: Out-AnsiHost — paints a rendering
 │  ├─ Out-AnsiString.psm1         # public: Out-AnsiString — rendering -> string[]
-│  ├─ Format-AnsiText.psm1         # public: Format-AnsiText
-│  ├─ Format-AnsiRule.psm1         # public: Format-AnsiRule
-│  ├─ Format-AnsiPath.psm1         # public: Format-AnsiPath
-│  ├─ Format-AnsiJson.psm1         # public: Format-AnsiJson
-│  ├─ Format-AnsiTree.psm1         # public: Format-AnsiTree
-│  ├─ Format-AnsiTable.psm1        # public: Format-AnsiTable
-│  ├─ Format-AnsiGrid.psm1         # public: Format-AnsiGrid
-│  ├─ Format-AnsiPanel.psm1        # public: Format-AnsiPanel
-│  ├─ Format-AnsiException.psm1    # public: Format-AnsiException
+│  ├─ Format-AnsiText.psm1        # public: Format-AnsiText
+│  ├─ Format-AnsiRule.psm1        # public: Format-AnsiRule
+│  ├─ Format-AnsiPath.psm1        # public: Format-AnsiPath
+│  ├─ Format-AnsiJson.psm1        # public: Format-AnsiJson
+│  ├─ Format-AnsiTree.psm1        # public: Format-AnsiTree
+│  ├─ Format-AnsiTable.psm1       # public: Format-AnsiTable
+│  ├─ Format-AnsiGrid.psm1        # public: Format-AnsiGrid
+│  ├─ Format-AnsiPanel.psm1       # public: Format-AnsiPanel
+│  ├─ Format-AnsiException.psm1   # public: Format-AnsiException
 │  ├─ Read-AnsiText.psm1          # public: Read-AnsiText
 │  ├─ Read-AnsiConfirm.psm1       # public: Read-AnsiConfirm
 │  ├─ Read-AnsiSelection.psm1     # public: Read-AnsiSelection
@@ -36,6 +38,8 @@ PwshAnsi/
 │  ├─ Format-AnsiBarChart.psm1    # public: Format-AnsiBarChart
 │  └─ Format-AnsiBreakdownChart.psm1 # public: Format-AnsiBreakdownChart
 ├─ tests/
+│  ├─ Assert-PwshAnsi.Tests.ps1   # Pester 5 tests for the bootstrap
+│  ├─ Ansi.Emoji.Tests.ps1        # Pester 5 tests for the emoji table
 │  ├─ Out-Ansi.Tests.ps1          # Pester 5 tests for both writers
 │  ├─ Format-AnsiText.Tests.ps1   # one file per component
 │  ├─ Format-AnsiRule.Tests.ps1
@@ -57,6 +61,7 @@ PwshAnsi/
 │  ├─ Format-AnsiBarChart.Tests.ps1
 │  └─ Format-AnsiBreakdownChart.Tests.ps1
 ├─ demo/
+│  ├─ Demo-PwshAnsi.ps1           # showcase of the published module
 │  ├─ Demo-AnsiText.ps1           # one demo per component, every parameter
 │  ├─ Demo-AnsiRule.ps1
 │  ├─ Demo-AnsiPath.ps1
@@ -78,44 +83,27 @@ PwshAnsi/
 │  ├─ Demo-AnsiTask.ps1
 │  └─ Demo-AnsiTitleAnimation.ps1
 ├─ docs/                         # this documentation
-├─ Install-AnsiPrerequisite.ps1   # setup: checks and installs PowerShell 7 + Pester
-├─ Publish-AnsiModule.ps1         # build one .psm1 + manifest, then publish
+├─ Publish-AnsiModule.ps1         # build three-file module + manifest, then publish
 ├─ artifacts/                    # built module, gitignored
 ├─ Invoke-Test.ps1               # test runner
 └─ README.md
 ```
 
 Each public function ships as its own `.psm1` and delegates shared work to
-`Ansi.Core.psm1`. Once the component set is complete they will be concatenated
-into a single module at build time; during development they are imported
-directly.
+`Ansi.Core.psm1`. During development they are imported directly; the build
+merges them into `PwshAnsi.Core.ps1`, loaded on 7.2+ by the 5.1-safe loader
+`PwshAnsi.psm1`.
 
 ## Setup
 
+Install Pester 5 for the test suite (requires pwsh 7.2+):
+
 ```powershell
-# from any shell, including Windows PowerShell 5.1
-powershell -ExecutionPolicy Bypass -File .\Install-AnsiPrerequisite.ps1
+Install-Module Pester -MinimumVersion 5.0.0 -Scope CurrentUser -Force
 ```
 
-`Install-AnsiPrerequisite.ps1` reports what is present, installs what is missing,
-and verifies the result by rendering a line with PwshAnsi. It targets PowerShell 7.2+
-(via winget, falling back to the official MSI) and Pester 5.x for the tests, and it
-is written to run under 5.1 — the shell you are in when PowerShell 7 is the thing
-missing.
-
-| Parameter                   | Meaning                                          |
-| --------------------------- | ------------------------------------------------ |
-| `-WhatIf` / `-Confirm`      | Nothing is installed without your say-so.        |
-| `-Force`                    | Answer yes to every install.                     |
-| `-SkipPowerShell`           | Report on PowerShell 7, do not install it.       |
-| `-SkipPester`               | Report on Pester, do not install it.             |
-| `-SkipSmokeTest`            | Do not render a line at the end.                 |
-| `-MinimumPowerShellVersion` | Override the 7.2.0 floor.                        |
-
-Exit codes: `0` everything present · `1` a step failed · `2` something is still
-missing (declined, `-WhatIf`, or a terminal restart is needed for `PATH`).
-
-On Linux and macOS it prints the package-manager command instead of guessing.
+To bootstrap a script so it works from Windows PowerShell 5.1 and always runs on the
+latest pwsh with the latest PwshAnsi, see [`Assert-PwshAnsi`](Assert-PwshAnsi.md).
 
 ## Import
 
@@ -200,6 +188,7 @@ plain text, identical layout.
 ## Demos
 
 ```powershell
+pwsh -File .\demo\Demo-PwshAnsi.ps1
 pwsh -File .\demo\Demo-AnsiText.ps1
 pwsh -File .\demo\Demo-AnsiRule.ps1
 pwsh -File .\demo\Demo-AnsiPath.ps1
@@ -229,21 +218,22 @@ pwsh -File .\demo\Demo-AnsiTitleAnimation.ps1      # watch the window title
 .\Publish-AnsiModule.ps1 -Version 1.0.0 -Publish -NuGetApiKey $key
 ```
 
-The build concatenates `src\*.psm1` — `Ansi.Core` first, then the writers, the
-components, the prompts — into `artifacts\PwshAnsi\<version>\PwshAnsi.psm1`
-with a manifest beside it. There is no DLL option: PowerShell script cannot be
-compiled to IL, so a binary module would mean rewriting the library in C#.
+The build produces three files in `artifacts\PwshAnsi\<version>\`:
 
-Per-file `#Requires`, sibling `Import-Module` lines, and each
-`Export-ModuleMember` are dropped, since the merged file is one scope; a single
-`Export-ModuleMember` for the 23 public functions is appended. `Ansi.Core`'s and
-`Ansi.Emoji`'s helpers stay internal — present, but not exported.
+| File | Description |
+| ---- | ----------- |
+| `PwshAnsi.psm1` | 5.1-safe loader: `Assert-PwshAnsi` and its helpers, plus a conditional dot-source of `PwshAnsi.Core.ps1` on 7.2+. |
+| `PwshAnsi.Core.ps1` | All other components merged in order. Dot-sourced by the loader; may use any pwsh 7.2 syntax. |
+| `PwshAnsi.psd1` | Manifest: `PowerShellVersion = '5.1'`, `CompatiblePSEditions = 'Desktop','Core'`, full `FunctionsToExport`. |
+
+Per-file `#Requires`, sibling `Import-Module` lines, and each `Export-ModuleMember`
+are stripped before merging. `Ansi.Core`'s and `Ansi.Emoji`'s helpers stay internal.
 
 | Parameter       | Meaning                                                        |
 | --------------- | -------------------------------------------------------------- |
 | `-Version`      | Version to stamp. Required.                                    |
 | `-OutputPath`   | Where to build. Default `.rtifacts`.                         |
-| `-Publish`      | Publish after building; prompts unless `-Force`.                |
+| `-Publish`      | Publish after building; prompts unless `-Force`.               |
 | `-Repository`   | Target repository. Default `PSGallery`.                        |
 | `-NuGetApiKey`  | Falls back to `$env:PSGALLERY_KEY`.                            |
 | `-SkipTests`    | Build without running the suite first.                         |

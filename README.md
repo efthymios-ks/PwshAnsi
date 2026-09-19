@@ -6,6 +6,7 @@ a renderable; `Out-AnsiHost` paints it, `Out-AnsiString` turns it into strings.
 ## Contents
 
 - [Overview](docs/Overview.md) — setup, runtime, layout, import, core contracts, demos, tests
+- [`Assert-PwshAnsi`](docs/Assert-PwshAnsi.md) — bootstrap: install pwsh and PwshAnsi, rerun from 5.1
 - [Out-AnsiHost / Out-AnsiString](docs/Out-Ansi.md) — the rendering object and the two writers
 - [Colours](docs/Colours.md) — the shared colour vocabulary and `NO_COLOR`
 - [Markup and markdown](docs/Markup.md) — tags, sugar, emoji, escaping
@@ -41,187 +42,28 @@ Import-Module PwshAnsi
 Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
 ```
 
-## Auto-install guard
+## Bootstrap
 
-For scripts that need to work on machines where PwshAnsi may not be installed, or that may be
-launched from Windows PowerShell 5.1, paste these two functions at the top of your script:
+For scripts that need to work from Windows PowerShell 5.1 or on machines where
+PwshAnsi may not yet be installed:
 
 ```powershell
-function Assert-Pwsh7
-{
-    param([hashtable]$Arguments = @{}, [string]$ScriptPath)
-
-    if ($PSVersionTable.PSVersion.Major -ge 7)
-    {
-        return
-    }
-
-    if (-not $ScriptPath)
-    {
-        $ScriptPath = Get-PSCallStack |
-            Select-Object -Skip 1 -ExpandProperty ScriptName -ErrorAction SilentlyContinue |
-            Where-Object { $_ } |
-            Select-Object -First 1
-    }
-
-    if (-not $ScriptPath -or -not (Test-Path $ScriptPath))
-    {
-        throw 'Assert-Pwsh7: cannot determine the script to relaunch. Pass -ScriptPath.'
-    }
-
-    $findPwsh = {
-        @(
-            (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
-            (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
-            (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe')
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\pwsh.exe')
-        ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-    }
-
-    $pwshPath = & $findPwsh
-
-    if (-not $pwshPath -and (Get-Command winget -ErrorAction SilentlyContinue))
-    {
-        Write-Host 'PowerShell 7 is required. Installing via winget...' -ForegroundColor Yellow
-        winget install --id Microsoft.PowerShell --source winget --exact `
-            --accept-package-agreements --accept-source-agreements --silent
-        $pwshPath = & $findPwsh
-    }
-
-    if (-not $pwshPath)
-    {
-        Write-Host 'PowerShell 7 is required. Installing via aka.ms/install-powershell...' -ForegroundColor Yellow
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $bootstrap = Join-Path $env:TEMP 'install-powershell.ps1'
-        Invoke-WebRequest -Uri 'https://aka.ms/install-powershell.ps1' -OutFile $bootstrap -UseBasicParsing
-        & $bootstrap -UseMSI -Quiet
-        Remove-Item $bootstrap -Force -ErrorAction SilentlyContinue
-        $pwshPath = & $findPwsh
-    }
-
-    if (-not $pwshPath)
-    {
-        throw 'PowerShell 7 still not found. Install it manually and re-run.'
-    }
-
-    $forward = @()
-
-    foreach ($entry in $Arguments.GetEnumerator())
-    {
-        if ($entry.Value -is [switch] -and -not $entry.Value.IsPresent)
-        {
-            continue
-        }
-
-        $forward += "-$($entry.Key)"
-
-        if ($entry.Value -is [switch])
-        {
-            continue
-        }
-
-        $forward += ($entry.Value | ForEach-Object { [string]$_ })
-    }
-
-    & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @forward
-    exit $LASTEXITCODE
-}
-
-function Assert-PwshAnsi
-{
-    param([string]$Repository = 'PSGallery')
-
-    if (Get-Module PwshAnsi)
-    {
-        return
-    }
-
-    $usePSResource = [bool](Get-Command Install-PSResource -ErrorAction SilentlyContinue)
-
-    $local = Get-Module PwshAnsi -ListAvailable |
-        Sort-Object Version -Descending |
-        Select-Object -First 1 -ExpandProperty Version
-
-    $remote = $null
-    try
-    {
-        if ($usePSResource)
-        {
-            $remote = (Find-PSResource -Name PwshAnsi -Repository $Repository -ErrorAction Stop | Select-Object -First 1).Version
-        }
-        else
-        {
-            $remote = (Find-Module -Name PwshAnsi -Repository $Repository -ErrorAction Stop | Select-Object -First 1).Version
-        }
-    }
-    catch
-    {
-        $remote = $null
-    }
-
-    $install = {
-        if ($usePSResource)
-        {
-            Install-PSResource -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
-                -TrustRepository -ErrorAction Stop
-            return
-        }
-
-        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue))
-        {
-            Install-PackageProvider -Name NuGet -Scope CurrentUser -Force -ErrorAction Stop | Out-Null
-        }
-
-        Install-Module -Name PwshAnsi -Repository $Repository -Scope CurrentUser `
-            -Force -AllowClobber -ErrorAction Stop
-    }
-
-    if (-not $local -or ($remote -and [string]$remote -ne [string]$local))
-    {
-        if ($local)
-        {
-            Write-Host "Updating PwshAnsi $local -> $remote..." -ForegroundColor Yellow
-        }
-        else
-        {
-            Write-Host "Installing PwshAnsi from $Repository..." -ForegroundColor Yellow
-        }
-
-        try
-        {
-            & $install
-        }
-        catch
-        {
-            throw "Could not install PwshAnsi: $($_.Exception.Message)"
-        }
-    }
-
-    Import-Module PwshAnsi -Force -Global -ErrorAction Stop
-
-    if (-not (Get-Command Format-AnsiText -ErrorAction SilentlyContinue))
-    {
-        throw 'PwshAnsi imported but its commands are missing. Install it manually and re-run.'
-    }
-}
-
-# Call in this order: pwsh 7 first, then PwshAnsi.
-Assert-Pwsh7 -Arguments $PSBoundParameters
+Install-Module PwshAnsi -Scope CurrentUser
+Import-Module PwshAnsi
 Assert-PwshAnsi
-
-Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
 ```
+
+`Assert-PwshAnsi` installs pwsh 7.2+ if missing, then checks for a newer PwshAnsi and
+reloads. See [`Assert-PwshAnsi`](docs/Assert-PwshAnsi.md).
 
 ## Setup
 
+Install Pester 5 to run the test suite (requires pwsh 7.2+):
+
 ```powershell
-# from any shell, including Windows PowerShell 5.1
-powershell -ExecutionPolicy Bypass -File .\Install-AnsiPrerequisite.ps1
+Install-Module Pester -MinimumVersion 5.0.0 -Scope CurrentUser -Force
 ```
 
-Checks for PowerShell 7.2+ and Pester 5.x, installs what is missing, and renders a
-line with PwshAnsi to prove it works. `-WhatIf` reports without installing, `-Force`
-answers yes. Exit codes: `0` ready · `1` a step failed · `2` still missing.
 
 ## Test
 
@@ -242,6 +84,7 @@ Each component has a demo that exercises every parameter, numbered section by
 section. Run them in a terminal — piping strips the colour by design.
 
 ```powershell
+pwsh -File .\demo\Demo-PwshAnsi.ps1
 pwsh -File .\demo\Demo-AnsiText.ps1
 pwsh -File .\demo\Demo-AnsiRule.ps1
 pwsh -File .\demo\Demo-AnsiPath.ps1
@@ -304,9 +147,9 @@ pwsh -File .\Publish-AnsiModule.ps1 -Version 1.0.0 -Publish -NuGetApiKey $key
 
 The suite runs first: a red test stops the script before anything is built or
 published, and `-SkipTests` is refused together with `-Publish`. The build
-concatenates `src\*.psm1` into
-`artifacts\PwshAnsi\<version>\PwshAnsi.psm1` with a manifest beside it,
-then imports it and renders with it before finishing.
+produces three files in `artifacts\PwshAnsi\<version>\` — `PwshAnsi.psm1`
+(5.1-safe loader), `PwshAnsi.Core.ps1` (the full library), and `PwshAnsi.psd1`
+— then imports the manifest and renders with it before finishing.
 
 | Parameter      | Meaning                                                     |
 | -------------- | ----------------------------------------------------------- |
@@ -323,7 +166,7 @@ then imports it and renders with it before finishing.
 `.github/workflows/publish.yml` runs on a version tag, and the tag is the version:
 `v0.3.0` publishes `0.3.0`, `v0.4.0-beta1` publishes `0.4.0` as prerelease `beta1`.
 It calls the same script — suite, build, validate, publish — with the API key from
-the `PSGALLERY_KEY` secret, and keeps the build as a run artifact.
+the `PSGALLERY_API_KEY` secret, and keeps the build as a run artifact.
 
 ```powershell
 git tag v0.3.0 && git push origin v0.3.0

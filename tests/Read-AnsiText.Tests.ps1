@@ -22,6 +22,7 @@ BeforeAll {
 
             Set-Item function:script:Test-AnsiInteractive -Value { $script:AnsiInteractive }
             Set-Item function:script:Test-AnsiNoColor -Value { $script:AnsiTestNoColor }
+            Set-Item function:script:Test-AnsiTerminal -Value { $false }
             # A real console empties when the typist stops, and the prompt leans on that to tell
             # a pasted newline from an answered one. The string 'BOUNDARY' in the key list is that
             # pause: the buffer reads as empty there, and the next read steps over it.
