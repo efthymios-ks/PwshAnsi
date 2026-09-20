@@ -16,6 +16,7 @@ Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
                   [-Overflow <Fold|Crop|Ellipsis>]
                   [-CursorColor <string>] [-TitleColor <string>] [-ChoiceColor <string>]
                   [-GroupColor <string>] [-HintColor <string>] [-PageSize <int>]
+                  [-Hotkeys <hashtable[]>]
                   [-TimeoutSeconds <int>] [-Markdown] [-Escape]
 ```
 
@@ -37,6 +38,7 @@ Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
 | `-PageSize`       | `10`           | Rows shown at once; the window scrolls with the cursor.                          |
 | `-Overflow`       | `Fold`         | What a choice too long for the console does: fold under its own first character, crop, or ellipsise. A hard `` `n `` in a label always breaks, and each of those lines folds in turn. |
 | `-Row`, `-Column` | *cursor*      | Paint the list at that cell, 0-based and required together, as one synchronized frame. Omit both and it lands where the cursor is, as before. |
+| `-Hotkeys`        | none           | Extra hotkeys layered on top of the built-ins. See [Hotkeys](#hotkeys). Colliding with a built-in throws.        |
 | `-TimeoutSeconds` | `0`            | Give up after N seconds and return `$null`.                                     |
 
 ## Keys
@@ -59,7 +61,7 @@ Pick a fruit
 › Apple
   Banana
   Cherry
-1/5  ↑↓ move · enter select · esc cancel
+1/5  ↑↓ Move · Enter Select · Esc Cancel
 ```
 
 The counter appears only when the list is longer than `-PageSize`.
@@ -85,7 +87,7 @@ Pick a fruit
   Citrus
     Lemon
     Lime
-1/4  ↑↓ move · enter select · esc cancel
+1/4  ↑↓ Move · Enter Select · Esc Cancel
 ```
 
 A header is view only here: it is bold, it takes no `›`, and the cursor never
@@ -140,6 +142,50 @@ Labels are parsed as markup, so a list can carry its own colour:
 Read-AnsiSelection '[bold]Environment[/]' @('[BrightGreen]Dev[/]', '[BrightRed]Production[/]')
 ```
 
+## Hotkeys
+
+`-Hotkeys` layers extra keys on top of the built-ins — a Refresh, a Details
+side-panel, whatever the caller needs — without forking the prompt. Each entry is
+`@{ Key; Description; Action }`:
+
+```powershell
+Read-AnsiSelection 'Pick' $fruit -Hotkeys @(
+    @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) $s.Note = 'refreshed' } }
+    @{ Key = 'F5'; Description = 'Reload'; Action = { param($s) $s.Note = 'reloaded' } }
+)
+```
+
+Draws:
+
+```
+1/5  ↑↓ Move · Enter Select · R Refresh · F5 Reload · Esc Cancel
+```
+
+`Key` is either a single character (matched case-insensitively against the typed
+character, and shown uppercased in the hint) or a `ConsoleKey` name like `F5`.
+
+The action runs against a state object it can mutate:
+
+| Field       | What it is                                       |
+| ----------- | ------------------------------------------------ |
+| `Index`     | the current cursor index — set it to move        |
+| `Items`     | the rows the prompt is drawing (read only)       |
+| `Focus`     | the indexes the cursor can land on (read only)   |
+| `Key`       | the raw `ConsoleKeyInfo` — inspect modifiers here |
+| `Note`      | set a string to show a note under the hint       |
+| `Decided`   | set `$true` to exit the prompt                   |
+| `Answer`    | the value to return when `Decided` is `$true`    |
+
+A caller who tries to rebind a built-in — `Enter`, `Escape`, arrows, `Home/End`,
+`PageUp/PageDown`, `k`, or `j` — gets a throw at the door:
+
+```
+Read-AnsiSelection -Hotkeys: 'Enter' is a reserved default key.
+```
+
+Passing `-Hotkeys` also adds a note row under the hint (blank when nothing was
+set), so the layout height is stable across repaints.
+
 ## Non-interactive and NO_COLOR
 
 Throws when input is redirected, and when `-Choices` is empty:
@@ -185,7 +231,7 @@ literal list and `Group-Object` output, and choosing a deploy target.
 
 ## Tests
 
-`tests/Read-AnsiSelection.Tests.ps1` — 42 Pester 5 tests. The console seams are
+`tests/Read-AnsiSelection.Tests.ps1` — 48 Pester 5 tests. The console seams are
 replaced in the module scope, so scripted keys drive the prompt and the painted
 rows are asserted frame by frame. Covers every movement key, the ends of the list,
 paging and the scrolling window, the position counter, the cursor marker, in-place
@@ -194,7 +240,10 @@ Esc, timeouts, empty choices, the redirected-input error, and `NO_COLOR` — and
 `-Grouped`: the drawn headers and indented members, headers skipped by every
 movement key, page moves snapping onto an item, the item-only counter, labels and
 object identity inside groups, `Group-Object` input, `-GroupColor`, empty groups,
-and both malformed-group errors.
+and both malformed-group errors — and for `-Hotkeys`: the collision throw on both a
+reserved char and a reserved key name, the hint splice, an action moving the
+cursor, an action deciding with its own answer, an action setting a note, and the
+row-count stability without `-Hotkeys`.
 
 ```powershell
 pwsh -File .\Invoke-Test.ps1 -Path .\tests\Read-AnsiSelection.Tests.ps1

@@ -4,8 +4,8 @@
 # Exercises Read-AnsiSelection. Interactive: it waits for your keys.
 # Run: pwsh -File .\demo\Demo-ReadAnsiSelection.ps1
 #
-# ↑↓ (or k/j) move · Home/End jump · PageUp/PageDown page · enter selects ·
-# esc cancels and returns $null.
+# ↑↓ (or k/j) Move · Home/End Jump · PageUp/PageDown Page · Enter Selects ·
+# Esc Cancels and returns $null. Add your own with -Hotkeys.
 
 $ErrorActionPreference = 'Stop'
 $srcRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'src'
@@ -95,8 +95,17 @@ $file = Read-AnsiSelection 'Which file?' $byExtension -Grouped -GroupChoicesProp
     -LabelProperty Name -PageSize 12
 Show-Answer 'File' $(if ($null -ne $file) { $file.Name } else { $null })
 
-# 9. Usage pattern — pick, then show the choice in a panel
-Show-DemoHeader '9. Usage pattern — choose a target, then act on it'
+# 9. -Hotkeys — add extra keys on top of the built-ins (try R for refresh, F to jump to first)
+Show-DemoHeader '9. -Hotkeys (R sets a note, F jumps to first)'
+$hotkeys = @(
+    @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) $s.Note = 'refreshed at ' + (Get-Date -Format HH:mm:ss) } }
+    @{ Key = 'f'; Description = 'First'; Action = { param($s) $s.Index = $s.Focus[0] } }
+)
+$withHotkeys = Read-AnsiSelection 'Pick a fruit' $fruit -Hotkeys $hotkeys
+Show-Answer 'Fruit' $withHotkeys
+
+# 10. Usage pattern — pick, then show the choice in a panel
+Show-DemoHeader '10. Usage pattern — choose a target, then act on it'
 $target = Read-AnsiSelection 'Deploy to' @('Dev', 'Staging', 'Production')
 if ($null -eq $target) {
     Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost

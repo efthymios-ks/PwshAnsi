@@ -54,6 +54,8 @@ function Read-AnsiSelection {
 
         [int]$Column = -1,
 
+        [hashtable[]]$Hotkeys,
+
         [switch]$Markdown,
 
         [switch]$Escape
@@ -70,6 +72,9 @@ function Read-AnsiSelection {
         if (-not (Test-AnsiInteractive)) {
             throw 'Read-AnsiSelection needs an interactive console: input is redirected.'
         }
+        Assert-AnsiHotkeys -Hotkeys $Hotkeys `
+            -ReservedKeys @('UpArrow','DownArrow','Home','End','PageUp','PageDown','Enter','Escape') `
+            -ReservedChars @('k','j') -Caller 'Read-AnsiSelection'
 
         $noColor = Test-AnsiNoColor
         $cursorFg = Get-AnsiColorName -Name $CursorColor
@@ -96,6 +101,7 @@ function Read-AnsiSelection {
         $index = $focus[0]
         $window = Get-AnsiChoiceWindow -Index $index -Count $items.Count -PageSize $PageSize
         $drawn = 0
+        $note = ''
         $deadline = if ($TimeoutSeconds -gt 0) { [datetime]::UtcNow.AddSeconds($TimeoutSeconds) } else { $null }
 
         # Nothing is typed here, and a list that repaints under a blinking cursor
@@ -112,8 +118,10 @@ function Read-AnsiSelection {
                 $rows = Get-AnsiSelectionRows -Title $Title -TitleFg $titleFg -Items $items -Index $index `
                     -Window $window -CursorFg $cursorFg -HintFg $hintFg -NoColor:$noColor `
                     -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
+                    -Hotkeys $Hotkeys -Note $note -NoteFg $hintFg `
                     -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
                 $drawn = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
+                $note = ''
 
                 $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable `
                     -Wait $wait -StopOn $stopOn
@@ -123,6 +131,10 @@ function Read-AnsiSelection {
                 # show the row it landed on before the prompt goes away.
                 $decided = $false
                 $answer = $null
+                $state = [pscustomobject]@{
+                    Index = $index; Items = $items; Focus = $focus
+                    Note = ''; Decided = $false; Answer = $null; Key = $null
+                }
 
                 foreach ($key in @($burst)) {
                 switch ($key.Key) {
@@ -141,10 +153,18 @@ function Read-AnsiSelection {
                     'Enter' { $decided = $true; $answer = $items[$index].Item }
                     'Escape' { $decided = $true; $answer = $null }
                     default {
-                        # k/j move too, for anyone who lives in vi.
-                        switch ([char]::ToLowerInvariant($key.KeyChar)) {
-                            'k' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
-                            'j' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
+                        $state.Index = $index
+                        if (Invoke-AnsiHotkey -Key $key -Hotkeys $Hotkeys -State $state) {
+                            $index = $state.Index
+                            if ($state.Note) { $note = [string]$state.Note }
+                            if ($state.Decided) { $decided = $true; $answer = $state.Answer }
+                            $state.Note = ''; $state.Decided = $false; $state.Answer = $null
+                        } else {
+                            # k/j move too, for anyone who lives in vi.
+                            switch ([char]::ToLowerInvariant($key.KeyChar)) {
+                                'k' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
+                                'j' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
+                            }
                         }
                     }
                 }
@@ -157,6 +177,7 @@ function Read-AnsiSelection {
                     $rows = Get-AnsiSelectionRows -Title $Title -TitleFg $titleFg -Items $items -Index $index `
                         -Window $window -CursorFg $cursorFg -HintFg $hintFg -NoColor:$noColor `
                         -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
+                        -Hotkeys $Hotkeys -Note $note -NoteFg $hintFg `
                         -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
                     $null = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
                     return $answer
@@ -182,6 +203,9 @@ function Get-AnsiSelectionRows {
         [Parameter(Mandatory)][string]$HintFg,
         [int]$Ordinal = 0,
         [int]$Total = 0,
+        [AllowNull()][hashtable[]]$Hotkeys,
+        [AllowEmptyString()][string]$Note = '',
+        [AllowNull()][string]$NoteFg,
         [switch]$NoColor,
         [switch]$Markdown,
         [switch]$Escape,
@@ -217,11 +241,18 @@ function Get-AnsiSelectionRows {
         }
     }
 
-    $hint = ($Items.Count -gt $Window.Size) `
-        ? "$Ordinal/$Total  ↑↓ move · enter select · esc cancel" `
-        : '↑↓ move · enter select · esc cancel'
+    $extra = Get-AnsiHotkeyHintFragment -Hotkeys $Hotkeys
+    $body = '↑↓ Move · Enter Select' + $extra + ' · Esc Cancel'
+    $hint = ($Items.Count -gt $Window.Size) ? "$Ordinal/$Total  $body" : $body
     $null = $rows.Add((Format-AnsiLine -Runs @((New-AnsiSelectionRun -Text $hint -Fg $HintFg)) `
                 -Width 0 -Justify Left -NoColor:$NoColor))
+
+    # A note row only makes sense when a hotkey action can write to it, so it lives behind
+    # -Hotkeys: callers who never opt in never pay a blank row.
+    if ($Hotkeys) {
+        $null = $rows.Add((Format-AnsiLine -Runs @((New-AnsiSelectionRun -Text $Note -Fg $NoteFg)) `
+                    -Width 0 -Justify Left -NoColor:$NoColor))
+    }
 
     return , $rows.ToArray()
 }

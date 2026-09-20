@@ -75,6 +75,99 @@ function Wait-AnsiKeyBurst {
     return , (Read-AnsiKeyBurst -ReadKey $ReadKey -KeyAvailable $KeyAvailable -StopOn $StopOn -Limit $Limit)
 }
 
+# Custom hotkeys sit next to the built-in bindings on the same prompt. The rule the callers
+# rely on is that a built-in never budges: a caller who tries to rebind Enter or Space gets
+# a throw at the door, not a surprising no-op mid-prompt.
+function Assert-AnsiHotkeys {
+    [CmdletBinding()]
+    param(
+        [AllowNull()][hashtable[]]$Hotkeys,
+        [AllowEmptyCollection()][string[]]$ReservedKeys = @(),
+        [AllowEmptyCollection()][char[]]$ReservedChars = @(),
+        [Parameter(Mandatory)][string]$Caller
+    )
+    if ($null -eq $Hotkeys -or $Hotkeys.Count -eq 0) { return }
+
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $Hotkeys) {
+        if ($null -eq $entry) { throw "$Caller -Hotkeys: entry is null." }
+        $key = [string]$entry['Key']
+        if ([string]::IsNullOrEmpty($key)) { throw "$Caller -Hotkeys: entry is missing 'Key'." }
+        if (-not $entry.ContainsKey('Description') -or $null -eq $entry['Description']) {
+            throw "$Caller -Hotkeys: entry '$key' is missing 'Description'."
+        }
+        if (-not ($entry['Action'] -is [scriptblock])) {
+            throw "$Caller -Hotkeys: entry '$key' needs an 'Action' scriptblock."
+        }
+
+        if ($key.Length -eq 1) {
+            $ch = [char]::ToLowerInvariant([char]$key)
+            if ($ReservedChars -contains $ch) {
+                throw "$Caller -Hotkeys: '$key' is a reserved default key."
+            }
+            $token = "char:$ch"
+        } else {
+            foreach ($reserved in $ReservedKeys) {
+                if ([string]::Equals($reserved, $key, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    throw "$Caller -Hotkeys: '$key' is a reserved default key."
+                }
+            }
+            $token = "name:$($key.ToLowerInvariant())"
+        }
+        if (-not $seen.Add($token)) {
+            throw "$Caller -Hotkeys: '$key' is listed twice."
+        }
+    }
+}
+
+function Invoke-AnsiHotkey {
+    # Returns $true if a hotkey ran, so the caller's default arm can skip its own fallback.
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)][System.ConsoleKeyInfo]$Key,
+        [AllowNull()][hashtable[]]$Hotkeys,
+        [Parameter(Mandatory)][object]$State
+    )
+    if ($null -eq $Hotkeys -or $Hotkeys.Count -eq 0) { return $false }
+
+    $char = [char]::ToLowerInvariant([char]$Key.KeyChar)
+    $name = [string]$Key.Key
+
+    foreach ($entry in $Hotkeys) {
+        $k = [string]$entry['Key']
+        $match = $false
+        if ($k.Length -eq 1) {
+            $match = ([char]::ToLowerInvariant([char]$k) -eq $char) -and ([int]$char -ne 0)
+        } else {
+            $match = [string]::Equals($k, $name, [System.StringComparison]::OrdinalIgnoreCase)
+        }
+        if ($match) {
+            $State.Key = $Key
+            & $entry['Action'] $State
+            return $true
+        }
+    }
+    return $false
+}
+
+function Get-AnsiHotkeyHintFragment {
+    # ' · L1 D1 · L2 D2' when there is anything to add; empty otherwise. The leading separator
+    # is part of the fragment so the caller can splice it in without worrying about spacing.
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([AllowNull()][hashtable[]]$Hotkeys)
+    if ($null -eq $Hotkeys -or $Hotkeys.Count -eq 0) { return '' }
+
+    $sb = [System.Text.StringBuilder]::new()
+    foreach ($entry in $Hotkeys) {
+        $k = [string]$entry['Key']
+        $label = if ($k.Length -eq 1) { $k.ToUpperInvariant() } else { $k }
+        $null = $sb.Append(' · ').Append($label).Append(' ').Append([string]$entry['Description'])
+    }
+    return $sb.ToString()
+}
+
 function Test-AnsiPositioned {
     [CmdletBinding()]
     [OutputType([bool])]
@@ -236,4 +329,7 @@ Export-ModuleMember -Function `
     Wait-AnsiKeyBurst, `
     Test-AnsiPositioned, `
     Write-AnsiPromptFrame, `
-    Set-AnsiPromptCursor
+    Set-AnsiPromptCursor, `
+    Assert-AnsiHotkeys, `
+    Invoke-AnsiHotkey, `
+    Get-AnsiHotkeyHintFragment

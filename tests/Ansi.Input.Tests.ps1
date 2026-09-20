@@ -172,3 +172,93 @@ Describe 'Get-AnsiFieldView' {
         $view.CaretColumn | Should -Be 0
     }
 }
+
+Describe 'Assert-AnsiHotkeys' {
+    It 'accepts $null and empty arrays without complaint' {
+        { Assert-AnsiHotkeys -Hotkeys $null -ReservedKeys @('Enter') -ReservedChars @('k') -Caller 'T' } |
+            Should -Not -Throw
+        { Assert-AnsiHotkeys -Hotkeys @() -ReservedKeys @('Enter') -ReservedChars @('k') -Caller 'T' } |
+            Should -Not -Throw
+    }
+
+    It 'throws when a single-char key collides' {
+        { Assert-AnsiHotkeys -Hotkeys @(@{ Key = 'K'; Description = 'X'; Action = {} }) `
+                -ReservedKeys @() -ReservedChars @('k') -Caller 'T' } |
+            Should -Throw "*'K' is a reserved default key*"
+    }
+
+    It 'throws when a ConsoleKey name collides (case-insensitive)' {
+        { Assert-AnsiHotkeys -Hotkeys @(@{ Key = 'enter'; Description = 'X'; Action = {} }) `
+                -ReservedKeys @('Enter') -ReservedChars @() -Caller 'T' } |
+            Should -Throw "*'enter' is a reserved default key*"
+    }
+
+    It 'throws when Description or Action is missing' {
+        { Assert-AnsiHotkeys -Hotkeys @(@{ Key = 'r'; Action = {} }) `
+                -ReservedKeys @() -ReservedChars @() -Caller 'T' } |
+            Should -Throw "*missing 'Description'*"
+        { Assert-AnsiHotkeys -Hotkeys @(@{ Key = 'r'; Description = 'X' }) `
+                -ReservedKeys @() -ReservedChars @() -Caller 'T' } |
+            Should -Throw "*needs an 'Action' scriptblock*"
+    }
+
+    It 'throws on duplicate keys within the array' {
+        { Assert-AnsiHotkeys -Hotkeys @(
+                @{ Key = 'r'; Description = 'A'; Action = {} }
+                @{ Key = 'R'; Description = 'B'; Action = {} }
+            ) -ReservedKeys @() -ReservedChars @() -Caller 'T' } |
+            Should -Throw "*'R' is listed twice*"
+    }
+}
+
+Describe 'Invoke-AnsiHotkey' {
+    It 'returns $false with no hotkeys' {
+        $state = [pscustomobject]@{ Key = $null; Ran = $false }
+        $key = [System.ConsoleKeyInfo]::new('r', [System.ConsoleKey]::R, $false, $false, $false)
+        Invoke-AnsiHotkey -Key $key -Hotkeys $null -State $state | Should -BeFalse
+    }
+
+    It 'matches a single-char hotkey case-insensitively and runs the action' {
+        $state = [pscustomobject]@{ Key = $null; Ran = $false }
+        $key = [System.ConsoleKeyInfo]::new('R', [System.ConsoleKey]::R, $true, $false, $false)
+        $result = Invoke-AnsiHotkey -Key $key -Hotkeys @(
+            @{ Key = 'r'; Description = 'X'; Action = { param($s) $s.Ran = $true } }
+        ) -State $state
+        $result | Should -BeTrue
+        $state.Ran | Should -BeTrue
+        $state.Key.KeyChar | Should -Be 'R'
+    }
+
+    It 'matches a ConsoleKey name hotkey' {
+        $state = [pscustomobject]@{ Key = $null; Ran = $false }
+        $key = [System.ConsoleKeyInfo]::new("`0", [System.ConsoleKey]::F5, $false, $false, $false)
+        $result = Invoke-AnsiHotkey -Key $key -Hotkeys @(
+            @{ Key = 'F5'; Description = 'X'; Action = { param($s) $s.Ran = $true } }
+        ) -State $state
+        $result | Should -BeTrue
+        $state.Ran | Should -BeTrue
+    }
+
+    It 'returns $false when no hotkey matches' {
+        $state = [pscustomobject]@{ Key = $null; Ran = $false }
+        $key = [System.ConsoleKeyInfo]::new('x', [System.ConsoleKey]::X, $false, $false, $false)
+        Invoke-AnsiHotkey -Key $key -Hotkeys @(
+            @{ Key = 'r'; Description = 'X'; Action = { param($s) $s.Ran = $true } }
+        ) -State $state | Should -BeFalse
+        $state.Ran | Should -BeFalse
+    }
+}
+
+Describe 'Get-AnsiHotkeyHintFragment' {
+    It 'returns an empty string when there are no hotkeys' {
+        Get-AnsiHotkeyHintFragment -Hotkeys $null | Should -BeExactly ''
+        Get-AnsiHotkeyHintFragment -Hotkeys @() | Should -BeExactly ''
+    }
+
+    It 'uppercases single-char labels and preserves ConsoleKey names' {
+        Get-AnsiHotkeyHintFragment -Hotkeys @(
+            @{ Key = 'r'; Description = 'Refresh'; Action = {} }
+            @{ Key = 'F5'; Description = 'Reload'; Action = {} }
+        ) | Should -BeExactly ' · R Refresh · F5 Reload'
+    }
+}

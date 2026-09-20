@@ -4,8 +4,8 @@
 # Exercises Read-AnsiMultiSelection. Interactive: it waits for your keys.
 # Run: pwsh -File .\demo\Demo-ReadAnsiMultiSelection.ps1
 #
-# ↑↓ (or k/j) move · space toggles · a toggles all · enter accepts ·
-# esc cancels and returns $null.
+# ↑↓ (or k/j) Move · Space Toggles · A Toggles All · Enter Accepts ·
+# Esc Cancels and returns $null. Add your own with -Hotkeys.
 
 $ErrorActionPreference = 'Stop'
 $srcRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'src'
@@ -113,8 +113,20 @@ $picked2 = Read-AnsiMultiSelection 'Which components?' $byTests -Grouped -Toggle
     -GroupChoicesProperty Group -LabelProperty Name
 Show-Answers 'Components' $(if ($null -ne $picked2) { @($picked2).Name } else { $null })
 
-# 12. Usage pattern — the selection drives what runs next
-Show-DemoHeader '12. Usage pattern — run only what was ticked'
+# 12. -Hotkeys — add extra keys on top of the built-ins (try I to invert every tick)
+Show-DemoHeader '12. -Hotkeys (I inverts every tick)'
+$hotkeys = @(
+    @{ Key = 'i'; Description = 'Invert'; Action = {
+            param($s)
+            for ($i = 0; $i -lt $s.Ticked.Length; $i++) { $s.Ticked[$i] = -not $s.Ticked[$i] }
+            $s.Note = 'inverted'
+        } }
+)
+$inverted = Read-AnsiMultiSelection 'Which suites?' $suites -Hotkeys $hotkeys -Selected 'Text', 'Table'
+Show-Answers 'Suites' $inverted
+
+# 13. Usage pattern — the selection drives what runs next
+Show-DemoHeader '13. Usage pattern — run only what was ticked'
 $run = Read-AnsiMultiSelection 'Run which steps?' @('Restore', 'Build', 'Test', 'Pack') -Selected 'Build', 'Test'
 if ($null -eq $run) {
     Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost

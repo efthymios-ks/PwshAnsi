@@ -182,7 +182,7 @@ Describe 'Read-AnsiMultiSelection — drawing and -Required' {
         $frame.Count | Should -Be 8                     # title + 5 choices + hint + note
         $frame[1] | Should -BeExactly ($script:Cursor + ' [' + $script:Check + '] apple')
         $frame[2] | Should -BeExactly '  [ ] banana'
-        $frame[6] | Should -Match '^1 selected'
+        $frame[6] | Should -Match '^1 Selected'
     }
 
     It 'refuses an empty selection with -Required and reports it' {
@@ -260,7 +260,7 @@ Describe 'Read-AnsiMultiSelection — groups, view only' {
         $frame[2] | Should -BeExactly ($script:Cursor + '   [' + $script:Check + '] strawberry')
         $frame[3] | Should -BeExactly '    [ ] raspberry'
         $frame[4] | Should -BeExactly '  Citrus'
-        $frame[7] | Should -Match '^1 selected'
+        $frame[7] | Should -Match '^1 Selected'
     }
 
     It 'moves straight past a header' {
@@ -280,7 +280,7 @@ Describe 'Read-AnsiMultiSelection — groups, view only' {
     It 'counts members, not headers' {
         Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'a'), (New-Key -Key Enter))
         $result = Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -PageSize 3 }
-        (Get-FinalFrame -Result $result -Title 'Pick')[-2] | Should -Match '^1/4  4 selected'
+        (Get-FinalFrame -Result $result -Title 'Pick')[-2] | Should -Match '^1/4  4 Selected'
     }
 
     It 'pre-ticks inside groups with -Selected' {
@@ -405,6 +405,68 @@ Describe 'Read-AnsiMultiSelection — groups, -ToggleGroups' {
         Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Spacebar), (New-Key -Key Escape))
         (Invoke-Prompt { Read-AnsiMultiSelection 'Pick' $script:Groups -Grouped -ToggleGroups }).Value |
             Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Read-AnsiMultiSelection — -Hotkeys' {
+    It 'throws when a hotkey collides with a reserved default' {
+        { Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'Spacebar'; Description = 'X'; Action = { param($s) } }
+            ) } | Should -Throw "*'Spacebar' is a reserved default key*"
+
+        { Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = ' '; Description = 'X'; Action = { param($s) } }
+            ) } | Should -Throw "*' ' is a reserved default key*"
+
+        { Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'a'; Description = 'X'; Action = { param($s) } }
+            ) } | Should -Throw "*'a' is a reserved default key*"
+    }
+
+    It 'splices the custom hotkey into the hint before Esc' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) } }
+            )
+        }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+        # title + 5 choices + hint + note (note row already existed in multi)
+        $frame.Count | Should -Be 8
+        $frame[-2] | Should -Match 'Enter Accept · R Refresh · Esc Cancel'
+    }
+
+    It 'lets an action mutate the ticked array' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'r'), (New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'r'; Description = 'Reverse'; Action = {
+                        param($s)
+                        for ($i = 0; $i -lt $s.Ticked.Length; $i++) { $s.Ticked[$i] = -not $s.Ticked[$i] }
+                    } }
+            )
+        }
+        @($result.Value) | Should -Be $script:Fruit
+    }
+
+    It 'lets an action decide with its own answer' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'z'))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'z'; Description = 'Zero'; Action = { param($s) $s.Decided = $true; $s.Answer = , @('zzz') } }
+            )
+        }
+        @($result.Value) | Should -Be @('zzz')
+    }
+
+    It 'lets an action set a note that shows on the next frame' {
+        Set-AnsiTestKeys -Module Read-AnsiMultiSelection -Keys @((New-Char -Char 'n'), (New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiMultiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'n'; Description = 'Note'; Action = { param($s) $s.Note = 'hello note' } }
+            )
+        }
+        ($result.Rows -join "`n") | Should -Match 'hello note'
     }
 }
 

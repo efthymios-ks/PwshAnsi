@@ -193,7 +193,7 @@ Describe 'Read-AnsiSelection — drawing' {
         $frame[0] | Should -BeExactly 'Pick'
         $frame[1] | Should -BeExactly ($script:Cursor + ' apple')
         $frame[2] | Should -BeExactly '  banana'
-        $frame[-1] | Should -Match 'enter select'
+        $frame[-1] | Should -Match 'Enter Select'
     }
 
     It 'marks the row the cursor is on' {
@@ -438,6 +438,67 @@ Describe 'Read-AnsiSelection — groups' {
     It 'throws when every group is empty' {
         { Read-AnsiSelection 'Pick' @(@{ Name = 'Empty'; Choices = @() }) -Grouped } |
             Should -Throw '*at least one choice*'
+    }
+}
+
+Describe 'Read-AnsiSelection — -Hotkeys' {
+    It 'throws when a hotkey collides with a reserved default' {
+        { Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'Enter'; Description = 'X'; Action = { param($s) } }
+            ) } | Should -Throw "*'Enter' is a reserved default key*"
+
+        { Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'k'; Description = 'X'; Action = { param($s) } }
+            ) } | Should -Throw "*'k' is a reserved default key*"
+    }
+
+    It 'splices the custom hotkey into the hint between defaults and Esc' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) } }
+            )
+        }
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+        # title + 5 choices + hint + note row (only when -Hotkeys is passed)
+        $frame.Count | Should -Be 8
+        $frame[-2] | Should -Match 'Enter Select · R Refresh · Esc Cancel'
+    }
+
+    It 'keeps the row count unchanged when -Hotkeys is not passed' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Fruit }
+        (Get-FinalFrame -Result $result -Title 'Pick').Count | Should -Be 7
+    }
+
+    It 'lets an action move the cursor' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Char -Char 'g'), (New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'g'; Description = 'Last'; Action = { param($s) $s.Index = $s.Focus[$s.Focus.Count - 1] } }
+            )
+        }
+        $result.Value | Should -BeExactly 'elderberry'
+    }
+
+    It 'lets an action decide with its own answer' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Char -Char 'z'))
+        $result = Invoke-Prompt {
+            Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'z'; Description = 'Zero'; Action = { param($s) $s.Decided = $true; $s.Answer = 'zzz' } }
+            )
+        }
+        $result.Value | Should -BeExactly 'zzz'
+    }
+
+    It 'lets an action set a note that shows on the next frame' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Char -Char 'n'), (New-Key -Key Enter))
+        $result = Invoke-Prompt {
+            Read-AnsiSelection 'Pick' $script:Fruit -Hotkeys @(
+                @{ Key = 'n'; Description = 'Note'; Action = { param($s) $s.Note = 'hello note' } }
+            )
+        }
+        ($result.Rows -join "`n") | Should -Match 'hello note'
     }
 }
 

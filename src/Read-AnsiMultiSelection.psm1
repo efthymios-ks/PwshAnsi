@@ -68,6 +68,8 @@ function Read-AnsiMultiSelection {
 
         [int]$Column = -1,
 
+        [hashtable[]]$Hotkeys,
+
         [switch]$Markdown,
 
         [switch]$Escape
@@ -87,6 +89,9 @@ function Read-AnsiMultiSelection {
         if (-not (Test-AnsiInteractive)) {
             throw 'Read-AnsiMultiSelection needs an interactive console: input is redirected.'
         }
+        Assert-AnsiHotkeys -Hotkeys $Hotkeys `
+            -ReservedKeys @('UpArrow','DownArrow','Home','End','PageUp','PageDown','Enter','Escape','Spacebar') `
+            -ReservedChars @(' ','k','j','a') -Caller 'Read-AnsiMultiSelection'
 
         $noColor = Test-AnsiNoColor
         $cursorFg = Get-AnsiColorName -Name $CursorColor
@@ -143,7 +148,7 @@ function Read-AnsiMultiSelection {
                 $rows = Get-AnsiMultiRows -Title $Title -TitleFg $titleFg -Items $items -Ticked $ticked `
                     -Index $index -Window $window -CursorFg $cursorFg -MarkFg $markFg -HintFg $hintFg `
                     -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
-                    -ToggleGroups:$ToggleGroups `
+                    -ToggleGroups:$ToggleGroups -Hotkeys $Hotkeys `
                     -Note $note -NoteFg $requiredFg -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
                 $drawn = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
                 $note = ''
@@ -156,6 +161,10 @@ function Read-AnsiMultiSelection {
                 # show the ticks it landed on before the prompt goes away.
                 $decided = $false
                 $answer = $null
+                $state = [pscustomobject]@{
+                    Index = $index; Items = $items; Focus = $focus; Ticked = $ticked
+                    Note = ''; Decided = $false; Answer = $null; Key = $null
+                }
 
                 foreach ($key in @($burst)) {
                 switch ($key.Key) {
@@ -187,21 +196,31 @@ function Read-AnsiMultiSelection {
                         }
                     }
                     default {
-                        switch ([char]::ToLowerInvariant($key.KeyChar)) {
-                            ' ' { Switch-AnsiMultiTick -Items $items -Ticked $ticked -Index $index }
-                            'k' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
-                            'j' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
-                            'a' {
-                                # Toggle every item, whatever group it is in: all on
-                                # unless everything is already on.
-                                $allOn = $true
-                                for ($i = 0; $i -lt $items.Count; $i++) {
-                                    if ($items[$i].IsGroup) { continue }
-                                    if (-not $ticked[$i]) { $allOn = $false; break }
-                                }
-                                for ($i = 0; $i -lt $items.Count; $i++) {
-                                    if ($items[$i].IsGroup) { continue }
-                                    $ticked[$i] = -not $allOn
+                        $state.Index = $index
+                        $state.Ticked = $ticked
+                        if (Invoke-AnsiHotkey -Key $key -Hotkeys $Hotkeys -State $state) {
+                            $index = $state.Index
+                            $ticked = $state.Ticked
+                            if ($state.Note) { $note = [string]$state.Note }
+                            if ($state.Decided) { $decided = $true; $answer = $state.Answer }
+                            $state.Note = ''; $state.Decided = $false; $state.Answer = $null
+                        } else {
+                            switch ([char]::ToLowerInvariant($key.KeyChar)) {
+                                ' ' { Switch-AnsiMultiTick -Items $items -Ticked $ticked -Index $index }
+                                'k' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
+                                'j' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
+                                'a' {
+                                    # Toggle every item, whatever group it is in: all on
+                                    # unless everything is already on.
+                                    $allOn = $true
+                                    for ($i = 0; $i -lt $items.Count; $i++) {
+                                        if ($items[$i].IsGroup) { continue }
+                                        if (-not $ticked[$i]) { $allOn = $false; break }
+                                    }
+                                    for ($i = 0; $i -lt $items.Count; $i++) {
+                                        if ($items[$i].IsGroup) { continue }
+                                        $ticked[$i] = -not $allOn
+                                    }
                                 }
                             }
                         }
@@ -216,7 +235,7 @@ function Read-AnsiMultiSelection {
                     $rows = Get-AnsiMultiRows -Title $Title -TitleFg $titleFg -Items $items -Ticked $ticked `
                         -Index $index -Window $window -CursorFg $cursorFg -MarkFg $markFg -HintFg $hintFg `
                         -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
-                        -ToggleGroups:$ToggleGroups `
+                        -ToggleGroups:$ToggleGroups -Hotkeys $Hotkeys `
                         -Note $note -NoteFg $requiredFg -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
                     $null = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
                     return $answer
@@ -262,6 +281,7 @@ function Get-AnsiMultiRows {
         [int]$Ordinal = 0,
         [int]$Total = 0,
         [switch]$ToggleGroups,
+        [AllowNull()][hashtable[]]$Hotkeys,
         [AllowEmptyString()][string]$Note = '',
         [AllowNull()][string]$NoteFg,
         [switch]$NoColor,
@@ -319,7 +339,8 @@ function Get-AnsiMultiRows {
     for ($i = 0; $i -lt $Items.Count; $i++) {
         if (-not $Items[$i].IsGroup -and $Ticked[$i]) { $count++ }
     }
-    $hint = "$count selected  ↑↓ move · space toggle · a all · enter accept · esc cancel"
+    $extra = Get-AnsiHotkeyHintFragment -Hotkeys $Hotkeys
+    $hint = "$count Selected  ↑↓ Move · Space Toggle · A All · Enter Accept" + $extra + ' · Esc Cancel'
     if ($Items.Count -gt $Window.Size) { $hint = "$Ordinal/$Total  " + $hint }
     $null = $rows.Add((Format-AnsiLine -Runs @((New-AnsiMultiRun -Text $hint -Fg $HintFg)) `
                 -Width 0 -Justify Left -NoColor:$NoColor))
