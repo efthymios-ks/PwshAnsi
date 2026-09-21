@@ -48,7 +48,9 @@ For scripts that need to work from Windows PowerShell 5.1 or on machines where
 PwshAnsi may not yet be installed:
 
 ```powershell
-Install-Module PwshAnsi -Scope CurrentUser
+if (-not (Get-Module PwshAnsi -ListAvailable)) {
+    Install-Module PwshAnsi -Scope CurrentUser -Force
+}
 Import-Module PwshAnsi
 Assert-PwshAnsi
 ```
