@@ -119,6 +119,7 @@ $script:CoreOrder = @(
     'Read-AnsiSelection.psm1'
     'Read-AnsiMultiSelection.psm1'
     'Read-AnsiPause.psm1'
+    'Read-AnsiEvent.psm1'
     'Format-AnsiProgress.psm1'
     'Invoke-AnsiTask.psm1'
     'Start-AnsiTitleAnimation.psm1'

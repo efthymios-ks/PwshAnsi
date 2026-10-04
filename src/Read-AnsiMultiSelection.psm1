@@ -132,6 +132,7 @@ function Read-AnsiMultiSelection {
         $index = $focus[0]
         $window = Get-AnsiChoiceWindow -Index $index -Count $items.Count -PageSize $PageSize
         $drawn = 0
+        $frameTop = -1   # anchored frame's top row, captured on first paint
         $note = ''
         $deadline = if ($TimeoutSeconds -gt 0) { [datetime]::UtcNow.AddSeconds($TimeoutSeconds) } else { $null }
 
@@ -140,6 +141,7 @@ function Read-AnsiMultiSelection {
         $readKey = { Read-AnsiKeyInfo }
         $keyAvailable = { Test-AnsiKeyAvailable }
         $wait = { Start-AnsiWait }
+        $getWindowSize = { Get-AnsiWindowSize }
         $stopOn = { param($k) [string]$k.Key -in @('Enter', 'Escape') }
 
         $cursor = Hide-AnsiCursor
@@ -150,11 +152,14 @@ function Read-AnsiMultiSelection {
                     -Ordinal (Get-AnsiChoiceFocusOrdinal -Focus $focus -Index $index) -Total $focus.Count `
                     -ToggleGroups:$ToggleGroups -Hotkeys $Hotkeys `
                     -Note $note -NoteFg $requiredFg -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape -Overflow $Overflow
+                if ($frameTop -lt 0 -and -not (Test-AnsiPositioned -Row $Row -Column $Column)) {
+                    try { $frameTop = [Console]::CursorTop } catch { $frameTop = -1 }
+                }
                 $drawn = Write-AnsiPromptFrame -Rows $rows -Row $Row -Column $Column -Drawn $drawn
                 $note = ''
 
                 $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable `
-                    -Wait $wait -StopOn $stopOn
+                    -Wait $wait -StopOn $stopOn -GetWindowSize $getWindowSize
                 if ($null -eq $burst -or @($burst).Count -eq 0) { return $null }
 
                 # The burst is applied in order, then painted once - but a key that decides has to
@@ -168,6 +173,14 @@ function Read-AnsiMultiSelection {
 
                 foreach ($key in @($burst)) {
                 switch ($key.Key) {
+                    'AnsiResize' {
+                        # Anchored frames may have wrapped at the old width; wipe before
+                        # the next loop iteration redraws at the new one.
+                        if (-not (Test-AnsiPositioned -Row $Row -Column $Column)) {
+                            if ($frameTop -ge 0) { Reset-AnsiPromptRegion -TopRow $frameTop }
+                            $drawn = 0
+                        }
+                    }
                     'UpArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step -1 }
                     'DownArrow' { $index = Step-AnsiChoiceFocus -Focus $focus -Index $index -Step 1 }
                     'Home' { $index = $focus[0] }

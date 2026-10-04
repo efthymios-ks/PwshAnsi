@@ -78,6 +78,81 @@ Describe 'Read-AnsiKeyBurst' {
     }
 }
 
+Describe 'Resize signal' {
+    It 'New-AnsiResizeSignal and Test-AnsiResizeSignal match' {
+        $signal = & $script:Input { New-AnsiResizeSignal }
+        [string]$signal.Key | Should -BeExactly 'AnsiResize'
+        (& $script:Input { param($s) Test-AnsiResizeSignal -Key $s } $signal) | Should -BeTrue
+    }
+
+    It 'Test-AnsiResizeSignal rejects a real key and $null' {
+        $real = New-TestKey -Key ([System.ConsoleKey]::Enter)
+        (& $script:Input { param($k) Test-AnsiResizeSignal -Key $k } $real) | Should -BeFalse
+        (& $script:Input { Test-AnsiResizeSignal -Key $null }) | Should -BeFalse
+    }
+}
+
+Describe 'Wait-AnsiKeyBurst' {
+    It 'returns the resize sentinel when the window size changes while waiting' {
+        $burst = & $script:Input {
+            # Script size: tick 0 is the baseline, ticks 1+ report the new size.
+            $size = [PSCustomObject]@{ T = 0 }
+            $get = { if ($size.T -eq 0) { $size.T++; return [PSCustomObject]@{ Width = 80; Height = 24 } }
+                     return [PSCustomObject]@{ Width = 100; Height = 24 } }.GetNewClosure()
+            $available = { $false }
+            $read = { throw 'no key should be read when a resize signals first' }
+            $waited = { }
+            Wait-AnsiKeyBurst -Deadline $null -ReadKey $read -KeyAvailable $available `
+                -Wait $waited -GetWindowSize $get
+        }
+        @($burst).Count | Should -Be 1
+        [string]$burst[0].Key | Should -BeExactly 'AnsiResize'
+    }
+
+    It 'returns the resize sentinel under a deadline too' {
+        $burst = & $script:Input {
+            $size = [PSCustomObject]@{ T = 0 }
+            $get = { if ($size.T -eq 0) { $size.T++; return [PSCustomObject]@{ Width = 80; Height = 24 } }
+                     return [PSCustomObject]@{ Width = 80; Height = 30 } }.GetNewClosure()
+            $available = { $false }
+            $read = { throw 'no key' }
+            $waited = { }
+            Wait-AnsiKeyBurst -Deadline ([datetime]::UtcNow.AddSeconds(5)) `
+                -ReadKey $read -KeyAvailable $available -Wait $waited -GetWindowSize $get
+        }
+        @($burst).Count | Should -Be 1
+        [string]$burst[0].Key | Should -BeExactly 'AnsiResize'
+    }
+
+    It 'returns the real key when the window size stays put' {
+        $burst = & $script:Input {
+            $tick = [PSCustomObject]@{ T = 0 }
+            # First poll says no key, second poll (after Wait) says yes.
+            $available = { if ($tick.T -eq 0) { $tick.T++; return $false } ; return $true }.GetNewClosure()
+            $queue = [PSCustomObject]@{ Keys = @([System.ConsoleKeyInfo]::new('a', [System.ConsoleKey]::A, $false, $false, $false)); Index = 0 }
+            $read = { if ($queue.Index -ge $queue.Keys.Count) { return $null }; $k = $queue.Keys[$queue.Index]; $queue.Index++; return $k }.GetNewClosure()
+            $get = { [PSCustomObject]@{ Width = 80; Height = 24 } }
+            $waited = { }
+            Wait-AnsiKeyBurst -Deadline $null -ReadKey $read -KeyAvailable $available `
+                -Wait $waited -GetWindowSize $get
+        }
+        @($burst).Count | Should -Be 1
+        [string]$burst[0].Key | Should -BeExactly 'A'
+    }
+
+    It 'works without a GetWindowSize seam at all' {
+        $burst = & $script:Input {
+            $queue = [PSCustomObject]@{ Keys = @([System.ConsoleKeyInfo]::new('x', [System.ConsoleKey]::X, $false, $false, $false)); Index = 0 }
+            $read = { if ($queue.Index -ge $queue.Keys.Count) { return $null }; $k = $queue.Keys[$queue.Index]; $queue.Index++; return $k }.GetNewClosure()
+            $available = { $true }
+            $waited = { }
+            Wait-AnsiKeyBurst -Deadline $null -ReadKey $read -KeyAvailable $available -Wait $waited
+        }
+        @($burst).Count | Should -Be 1
+        [string]$burst[0].Key | Should -BeExactly 'X'
+    }
+}
+
 Describe 'Update-AnsiFieldState' {
     It 'types at the caret' {
         $state = Invoke-Field -Start '' -Keys (New-CharKeys 'abc')

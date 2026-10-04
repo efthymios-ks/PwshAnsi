@@ -69,16 +69,24 @@ function Read-AnsiConfirm {
 
     # One key answers this, so the cursor stays out of the way.
     $cursor = Hide-AnsiCursor
+    $size = Get-AnsiWindowSize
     	try {
         while ($null -eq $answer) {
-            if ($null -ne $deadline) {
-                while (-not (Test-AnsiKeyAvailable)) {
-                    if ([datetime]::UtcNow -ge $deadline) {
-                        Write-Host ''
-                        return $null
-                    }
-                    Start-AnsiWait
+            # Confirm answers to a single key and does its own loop rather than reach
+            # through Wait-AnsiKeyBurst, so resize detection lives in-line here too.
+            while (-not (Test-AnsiKeyAvailable)) {
+                if ($null -ne $deadline -and [datetime]::UtcNow -ge $deadline) {
+                    Write-Host ''
+                    return $null
                 }
+                $current = Get-AnsiWindowSize
+                if ($current.Width -ne $size.Width -or $current.Height -ne $size.Height) {
+                    if (-not (Test-AnsiPositioned -Row $Row -Column $Column)) { Clear-AnsiLine }
+                    Write-AnsiConfirmPrompt -Prompt $Prompt -PromptFg $promptFg -Choices $choices -ChoiceFg $choiceFg `
+                        -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape -Row $Row -Column $Column
+                    $size = $current
+                }
+                Start-AnsiWait
             }
 
             $key = Read-AnsiKeyInfo

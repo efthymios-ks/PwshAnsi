@@ -27,25 +27,15 @@ a renderable; `Out-AnsiHost` paints it, `Out-AnsiString` turns it into strings.
 - [`Read-AnsiSelection`](docs/Read-AnsiSelection.md) — pick one item with the arrow keys, flat or under view-only group headers
 - [`Read-AnsiMultiSelection`](docs/Read-AnsiMultiSelection.md) — tick several items, with group headers that tick a group whole
 - [`Read-AnsiPause`](docs/Read-AnsiPause.md) — wait for a key before carrying on
-- `Ansi.Input` *(internal)* — shared input layer the prompts use: key burst grouping, field state and caret, positioned frame rendering
+- [`Read-AnsiEvent`](docs/Read-AnsiEvent.md) — wait for a terminal event so a caller can redraw outside a prompt
+- [`Ansi.Input`](docs/Ansi.Input.md) *(internal)* — shared input layer the prompts use: key burst grouping, field state and caret, positioned frame rendering, resize signalling
 - [`Invoke-AnsiTask`](docs/Invoke-AnsiTask.md) — run steps behind live text and a progress bar
 - [`Start-AnsiTitleAnimation`](docs/Start-AnsiTitleAnimation.md) — turn the braille dots in the window title while a job runs
 
 ## Quick start
 
-Install once (requires pwsh 7+):
-
-```powershell
-Install-Module PwshAnsi -Scope CurrentUser
-Import-Module PwshAnsi
-
-Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
-```
-
-## Bootstrap
-
-For scripts that need to work from Windows PowerShell 5.1 or on machines where
-PwshAnsi may not yet be installed:
+Install and import;
+works from Windows PowerShell 5.1 upwards:
 
 ```powershell
 if (-not (Get-Module PwshAnsi -ListAvailable)) {
@@ -53,10 +43,38 @@ if (-not (Get-Module PwshAnsi -ListAvailable)) {
 }
 Import-Module PwshAnsi
 Assert-PwshAnsi
+
+Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
 ```
 
-`Assert-PwshAnsi` installs pwsh 7.2+ if missing, then checks for a newer PwshAnsi and
-reloads. See [`Assert-PwshAnsi`](docs/Assert-PwshAnsi.md).
+`Assert-PwshAnsi` installs pwsh 7.2+ if missing,
+then checks for a newer PwshAnsi and reloads.
+See [`Assert-PwshAnsi`](docs/Assert-PwshAnsi.md).
+
+## Redraw on resize
+
+`Format-Ansi*` renderables measure against the terminal width when they are built,
+so a static frame does not reflow on its own.
+Wrap the view in a scriptblock and loop on [`Read-AnsiEvent`](docs/Read-AnsiEvent.md):
+it blocks until the terminal changes shape,
+and the next pass rebuilds everything at the new width.
+
+```powershell
+$render = {
+    Clear-Host
+    Format-AnsiRule 'Live view' -Color BrightCyan | Out-AnsiHost
+    Get-Process | Select-Object -First 10 Name, Id, CPU |
+        Format-AnsiTable | Out-AnsiHost
+}
+
+while ($true) {
+    & $render
+    $null = Read-AnsiEvent   # blocks until the next terminal event
+}
+```
+
+Prompts handle resize on their own:
+the view under a `Read-Ansi*` call reflows to the new width while the prompt is open.
 
 ## Setup
 
@@ -114,31 +132,6 @@ pwsh -File .\demo\Demo-ReadAnsiMultiSelection.ps1
 pwsh -File .\demo\Demo-ReadAnsiPause.ps1
 pwsh -File .\demo\Demo-AnsiInput.ps1
 ```
-
-## How the prompts read keys
-
-All `Read-Ansi*` prompts share a single input layer (`src/Ansi.Input.psm1`) rather than each
-rolling their own key loop.
-
-**Key burst grouping.** `Read-AnsiKeyBurst` blocks for the first key and then drains whatever
-is already queued. A paste arrives as a burst; the prompt applies every key in order and repaints
-once, so a pasted path does not stutter. The burst limit caps at 512 keys before a forced repaint,
-so a very long paste becomes two bursts rather than one frozen frame.
-
-**Field state.** `New-AnsiFieldState` and `Update-AnsiFieldState` track the text, the caret
-position, and the scroll window. `Get-AnsiFieldView` returns the slice that fits the visible
-width and the caret column within that slice, so the caret stays on screen regardless of how
-wide the text grows. Pasted line breaks are kept in the value and drawn as `\n` (two columns),
-so a multi-line paste lands whole in one field.
-
-**Positioned rendering.** `Write-AnsiPromptFrame` can paint at an arbitrary cell (the `-Row` and
-`-Column` parameters on each prompt) as a single synchronized write rather than walking the cursor
-up line by line. `Set-AnsiPromptCursor` places the caret back after each frame, because a
-synchronized write restores the caller's cursor position.
-
-**Testable seams.** The console calls (`ReadKey`, `KeyAvailable`, `Wait`) are passed in as
-scriptblocks rather than called directly. The test suite replaces them in the module scope, so a
-scripted key list drives every prompt — no keyboard, no waiting.
 
 ## Build and publish
 

@@ -151,6 +151,7 @@ function Read-AnsiKeyLine {
     $readKey = { Read-AnsiKeyInfo }
     $keyAvailable = { Test-AnsiKeyAvailable }
     $wait = { Start-AnsiWait }
+    $getWindowSize = { Get-AnsiWindowSize }
     $stopOn = { param($k) [string]$k.Key -eq 'Escape' }
 
     $prefix = ''
@@ -190,7 +191,8 @@ function Read-AnsiKeyLine {
     $cursor = Show-AnsiCursor
     try {
         while ($true) {
-            $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable -Wait $wait -StopOn $stopOn
+            $burst = Wait-AnsiKeyBurst -Deadline $deadline -ReadKey $readKey -KeyAvailable $keyAvailable `
+                -Wait $wait -StopOn $stopOn -GetWindowSize $getWindowSize
             # Nothing at all means the input ended: a timeout, or a host with no more keys.
             if ($null -eq $burst -or @($burst).Count -eq 0) {
                 return [PSCustomObject]@{ Value = $state.Text; TimedOut = $true; Cancelled = $false }
@@ -201,6 +203,20 @@ function Read-AnsiKeyLine {
                 $key = $keys[$i]
                 if ($null -eq $key) {
                     return [PSCustomObject]@{ Value = $state.Text; TimedOut = $true; Cancelled = $false }
+                }
+
+                # Resize: recompute the field width against the new buffer and let the
+                # trailing paint draw at the new size. Row and column stay put - the prompt
+                # text above the field is written outside this function and does not reflow.
+                if ([string]$key.Key -eq 'AnsiResize') {
+                    if ($positioned) {
+                        try {
+                            $buffer = [Console]::BufferWidth
+                            if ($column -ge $buffer) { $column = [Math]::Max(0, $buffer - 1) }
+                            $width = [Math]::Max(1, $buffer - $column - 1)
+                        } catch { }
+                    }
+                    continue
                 }
 
                 # A newline in the middle of a burst came from a paste, not from a finger: it is

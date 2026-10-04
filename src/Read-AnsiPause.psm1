@@ -57,25 +57,36 @@ function Read-AnsiPause {
 
     # Nothing is typed at a pause, so the cursor has no business blinking.
     $cursor = Hide-AnsiCursor
+    $size = Get-AnsiWindowSize
     	try {
         while ($true) {
             Write-AnsiPauseMessage -Message $Message -Fg $messageFg -Deadline $deadline `
                 -ShowCountdown:$ShowCountdown -NoColor:$noColor -Markdown:$Markdown -Escape:$Escape `
                 -Row $Row -Column $Column
 
-            if ($null -ne $deadline) {
-                $timedOut = $false
-                while (-not (Test-AnsiKeyAvailable)) {
-                    if ([datetime]::UtcNow -ge $deadline) { $timedOut = $true; break }
-                    # Redraw once a second so a countdown ticks; otherwise just wait.
-                    if ($ShowCountdown) { break }
-                    Start-AnsiWait
+            # Poll with a Wait tick so a resize or a countdown tick can break the wait
+            # without a keystroke. The countdown ticks at 250ms, everything else at the
+            # Start-AnsiWait default.
+            $timedOut = $false
+            $resized = $false
+            while (-not (Test-AnsiKeyAvailable)) {
+                if ($null -ne $deadline -and [datetime]::UtcNow -ge $deadline) { $timedOut = $true; break }
+                $current = Get-AnsiWindowSize
+                if ($current.Width -ne $size.Width -or $current.Height -ne $size.Height) {
+                    $size = $current
+                    $resized = $true
+                    break
                 }
-                if ($timedOut) { break }
-                if ($ShowCountdown -and -not (Test-AnsiKeyAvailable)) {
-                    Start-AnsiWait -Milliseconds 250
-                    continue
-                }
+                if ($ShowCountdown -and $null -ne $deadline) { Start-AnsiWait -Milliseconds 250; break }
+                Start-AnsiWait
+            }
+            if ($timedOut) { break }
+            if ($resized) {
+                if (-not (Test-AnsiPositioned -Row $Row -Column $Column)) { Clear-AnsiLine }
+                continue
+            }
+            if ($ShowCountdown -and $null -ne $deadline -and -not (Test-AnsiKeyAvailable)) {
+                continue
             }
 
             $key = Read-AnsiKeyInfo

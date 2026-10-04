@@ -22,6 +22,28 @@ Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChec
 # this simply becomes two bursts.
 $script:AnsiBurstLimit = 512
 
+# A resize is reported as a one-element burst alongside the real key stream so prompts
+# can rerender from the wait loop they already sit in. [ConsoleKeyInfo].Key is an enum,
+# so a sentinel can only ride on a PSCustomObject - prompts switch on [string]$key.Key
+# and the name 'AnsiResize' never collides with a ConsoleKey.
+function New-AnsiResizeSignal {
+    [CmdletBinding()]
+    param()
+    return [PSCustomObject]@{
+        Key       = 'AnsiResize'
+        KeyChar   = [char]0
+        Modifiers = [System.ConsoleModifiers]0
+    }
+}
+
+function Test-AnsiResizeSignal {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([AllowNull()][object]$Key)
+    if ($null -eq $Key) { return $false }
+    return ([string]$Key.Key -eq 'AnsiResize')
+}
+
 # The console seams arrive as scriptblocks rather than being called here, so they resolve in
 # the prompt's own module scope - which is the scope the test suite replaces them in.
 function Read-AnsiKeyBurst {
@@ -57,6 +79,10 @@ function Read-AnsiKeyBurst {
 
 function Wait-AnsiKeyBurst {
     # $null means the deadline passed with nothing typed; the caller treats that as a timeout.
+    # -GetWindowSize is optional: pass it to turn a resize into a one-element burst carrying
+    # the resize sentinel, so the caller's loop rerenders at the new size without a keystroke.
+    # The sentinel fires once the size has been stable for the settle window, so a drag
+    # produces one repaint at the end instead of flicker all the way through.
     [CmdletBinding()]
     param(
         [AllowNull()][object]$Deadline,
@@ -64,13 +90,40 @@ function Wait-AnsiKeyBurst {
         [Parameter(Mandatory)][scriptblock]$KeyAvailable,
         [Parameter(Mandatory)][scriptblock]$Wait,
         [AllowNull()][scriptblock]$StopOn,
-        [int]$Limit = 0
+        [AllowNull()][scriptblock]$GetWindowSize,
+        [int]$Limit = 0,
+        [int]$ResizeSettleMilliseconds = 150
     )
-    if ($null -ne $Deadline) {
-        while (-not (& $KeyAvailable)) {
-            if ([datetime]::UtcNow -ge $Deadline) { return $null }
-            & $Wait
+    $baseline = $null
+    $lastSeen = $null
+    $lastChangeAt = $null
+    if ($GetWindowSize) {
+        try { $baseline = & $GetWindowSize; $lastSeen = $baseline } catch { $baseline = $null }
+    }
+
+    # Poll for a key with a Wait tick in between so a resize can be noticed without a
+    # keystroke. No deadline is the same loop with no clock to run out.
+    while (-not (& $KeyAvailable)) {
+        if ($null -ne $Deadline -and [datetime]::UtcNow -ge $Deadline) { return $null }
+        if ($GetWindowSize -and $null -ne $baseline) {
+            $current = $null
+            try { $current = & $GetWindowSize } catch { $current = $null }
+            if ($null -ne $current) {
+                if ($current.Width -ne $lastSeen.Width -or $current.Height -ne $lastSeen.Height) {
+                    # Still dragging: restart the settle clock on every change.
+                    $lastSeen = $current
+                    $lastChangeAt = [datetime]::UtcNow
+                } elseif ($null -ne $lastChangeAt -and
+                          ([datetime]::UtcNow - $lastChangeAt).TotalMilliseconds -ge $ResizeSettleMilliseconds) {
+                    if ($lastSeen.Width -ne $baseline.Width -or $lastSeen.Height -ne $baseline.Height) {
+                        return , @((New-AnsiResizeSignal))
+                    }
+                    # Drag that ended back on the baseline: no sentinel, keep waiting.
+                    $lastChangeAt = $null
+                }
+            }
         }
+        & $Wait
     }
     return , (Read-AnsiKeyBurst -ReadKey $ReadKey -KeyAvailable $KeyAvailable -StopOn $StopOn -Limit $Limit)
 }
@@ -209,6 +262,25 @@ function Write-AnsiPromptFrame {
     return $Rows.Count
 }
 
+function Reset-AnsiPromptRegion {
+    # Clear from the top of a frame down to the end of the screen. On resize an
+    # anchored prompt would otherwise append a fresh frame under the stale one
+    # whose rows may have wrapped at the old width - a repaint cannot walk the
+    # cursor up over the right physical height any more. Move to the known top
+    # row and let the terminal clear from there.
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][int]$TopRow)
+
+    if (-not (Test-AnsiTerminal)) { return }
+    try {
+        $row = [Math]::Max(0, $TopRow)
+        [Console]::SetCursorPosition(0, $row)
+        # ED 0: erase from the cursor to the end of the display.
+        [Console]::Out.Write("$([char]27)[0J")
+        [Console]::Out.Flush()
+    } catch { }
+}
+
 function Set-AnsiPromptCursor {
     # A synchronized frame puts the caller's cursor back, so a prompt that shows one has to
     # place it again after every paint.
@@ -327,8 +399,11 @@ Export-ModuleMember -Function `
     Get-AnsiFieldView, `
     Read-AnsiKeyBurst, `
     Wait-AnsiKeyBurst, `
+    New-AnsiResizeSignal, `
+    Test-AnsiResizeSignal, `
     Test-AnsiPositioned, `
     Write-AnsiPromptFrame, `
+    Reset-AnsiPromptRegion, `
     Set-AnsiPromptCursor, `
     Assert-AnsiHotkeys, `
     Invoke-AnsiHotkey, `

@@ -533,6 +533,16 @@ function Start-AnsiWait {
     Start-Sleep -Milliseconds $Milliseconds
 }
 
+# The current window size, as a two-field object. A seam so a test can hand a
+# prompt a scripted size: a resize is a change between two calls to this.
+function Get-AnsiWindowSize {
+    try {
+        return [PSCustomObject]@{ Width = [Console]::WindowWidth; Height = [Console]::WindowHeight }
+    } catch {
+        return [PSCustomObject]@{ Width = 0; Height = 0 }
+    }
+}
+
 # --- Frames ------------------------------------------------------------------
 # A positioned repaint is built as one string and written once. Several writes let
 # the terminal present a half-drawn frame, and that is what flicker is.
@@ -1116,6 +1126,7 @@ Test-AnsiInteractive,
 Test-AnsiKeyAvailable,
 Read-AnsiKeyInfo,
 Start-AnsiWait,
+Get-AnsiWindowSize,
 Move-AnsiCursorUp,
 Clear-AnsiLine,
 ConvertTo-AnsiChoices,
