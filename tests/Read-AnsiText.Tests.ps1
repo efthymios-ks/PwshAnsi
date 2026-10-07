@@ -38,7 +38,14 @@ BeforeAll {
                 $script:AnsiKeyIndex++
                 return $key
             }
-            Set-Item function:script:Start-AnsiWait -Value { param([int]$Milliseconds = 25) }
+            # A wait tick is time passing: in a real console the typist eventually resumes,
+            # so the empty-buffer pause ends. In the mock, the equivalent is to step the key
+            # index past any boundary sentinels so the next key read sees the following burst.
+            Set-Item function:script:Start-AnsiWait -Value {
+                param([int]$Milliseconds = 25)
+                while ($script:AnsiKeyIndex -lt $script:AnsiKeys.Count -and
+                    $script:AnsiKeys[$script:AnsiKeyIndex] -is [string]) { $script:AnsiKeyIndex++ }
+            }
         }
     }
 

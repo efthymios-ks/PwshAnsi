@@ -125,6 +125,58 @@ function ConvertTo-AnsiPortableArgument {
     return $bound
 }
 
+# A classic console window: an interactive one that is neither Windows Terminal nor an editor's
+# terminal. A rerun inside it keeps its font, which lacks the glyphs PwshAnsi draws with.
+function Test-AnsiClassicConsole {
+    if ($env:WT_SESSION -or $env:TERM_PROGRAM) { return $false }
+    try { return -not ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) }
+    catch { return $false }
+}
+
+# wt.exe on the PATH, or at the standard per-user WindowsApps alias, or $null. The alias path is
+# checked explicitly because a freshly installed Windows Terminal is reachable from a new shell
+# but not from this already-running one, where PATH was cached at startup.
+function Find-AnsiTerminal {
+    $wt = Get-Command -Name 'wt.exe' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($wt) { return $wt.Source }
+    if ($env:LOCALAPPDATA) {
+        $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\wt.exe'
+        if (Test-Path -LiteralPath $alias) { return $alias }
+    }
+    return $null
+}
+
+# Installs Windows Terminal for the current user via winget. Appx packages install without
+# admin, so no UAC prompt is raised. Throws when winget is missing or returns non-zero.
+function Install-AnsiWindowsTerminal {
+    $winget = Get-Command -Name 'winget.exe' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $winget) { throw 'winget is not available on this machine.' }
+
+    $arguments = @(
+        'install', '--id', 'Microsoft.WindowsTerminal',
+        '--silent', '--accept-source-agreements', '--accept-package-agreements',
+        '--scope', 'user'
+    )
+    Write-AnsiLog 'Installing Windows Terminal via winget...'
+    $process = Start-Process -FilePath $winget.Source -ArgumentList $arguments -Wait -PassThru -NoNewWindow -ErrorAction Stop
+    if ($process.ExitCode -ne 0) { throw "winget exited with $($process.ExitCode)." }
+    Write-AnsiLog 'Windows Terminal installed.' -Outcome
+}
+
+# Windows Terminal arguments for a new tab in the most recent window, started in the current folder.
+# Windows Terminal splits its commands at semicolons, and a trailing backslash would escape the
+# closing quote, so both are escaped.
+function Get-AnsiTerminalTabArgument {
+    param([Parameter(Mandatory)][string]$Pwsh, [Parameter(Mandatory)][string]$EncodedCommand)
+    $tab = @('-w', '0', 'new-tab')
+    if ($PWD.Provider.Name -eq 'FileSystem') {
+        $directory = $PWD.ProviderPath.Replace(';', '\;') -replace '\\$', '\\'
+        $tab += @('-d', ('"{0}"' -f $directory))
+    }
+    $tab += @(('"{0}"' -f $Pwsh), '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $EncodedCommand)
+    return ($tab -join ' ')
+}
+
 function Invoke-AnsiRerun {
     param(
         [Parameter(Mandatory)][string]$Pwsh,
@@ -137,21 +189,43 @@ function Invoke-AnsiRerun {
     $clixml = Join-Path ([IO.Path]::GetTempPath()) ('PwshAnsi-{0}.clixml' -f [guid]::NewGuid())
     $bound | Export-Clixml -LiteralPath $clixml
 
+    # The stage marker travels inside the command: a Windows Terminal tab is started by the
+    # terminal, not by this process, so it does not inherit this environment.
+    $done    = (Get-Item -Path "env:$($script:AnsiRerunVar)" -ErrorAction SilentlyContinue).Value
+    $marker  = (@($done, $Stage) | Where-Object { $_ }) -join ','
     $quote   = { param($s) "'" + ($s -replace "'", "''") + "'" }
     $command = @(
+        "`$env:$($script:AnsiRerunVar) = $(& $quote $marker)"
         "`$p = Import-Clixml -LiteralPath $(& $quote $clixml)"
         "Remove-Item -LiteralPath $(& $quote $clixml) -Force"
         "& $(& $quote $ScriptPath) @p"
         'exit $LASTEXITCODE'
     ) -join "`n"
+    $encoded = ConvertTo-AnsiEncodedCommand $command
+
+    # Moving to pwsh from a classic console opens a Windows Terminal tab instead, so the script
+    # draws with a font that has the glyphs. Windows Terminal is installed on first use when it
+    # is missing. The tab runs on its own: this window ends here.
+    $terminal = $null
+    if ($Stage -eq 'pwsh' -and (Test-AnsiClassicConsole)) {
+        $terminal = Find-AnsiTerminal
+        if (-not $terminal) {
+            try { Install-AnsiWindowsTerminal; $terminal = Find-AnsiTerminal }
+            catch { Write-AnsiLog "Windows Terminal unavailable, staying in this window: $($_.Exception.Message)" }
+        }
+    }
+    if ($terminal) {
+        Write-AnsiLog "Restarting the script in a Windows Terminal tab with $Pwsh..." -Outcome
+        Start-Process -FilePath $terminal -ArgumentList (Get-AnsiTerminalTabArgument -Pwsh $Pwsh -EncodedCommand $encoded)
+        exit 0
+    }
 
     $reason = 'to load the new PwshAnsi'
     if ($Stage -eq 'pwsh') { $reason = "in $Pwsh" }
     Write-AnsiLog "Restarting the script $reason..." -Outcome
 
-    $done = (Get-Item -Path "env:$($script:AnsiRerunVar)" -ErrorAction SilentlyContinue).Value
-    Set-Item -Path "env:$($script:AnsiRerunVar)" -Value ((@($done, $Stage) | Where-Object { $_ }) -join ',')
-    & $Pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand (ConvertTo-AnsiEncodedCommand $command)
+    Set-Item -Path "env:$($script:AnsiRerunVar)" -Value $marker
+    & $Pwsh -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded
     $code = $LASTEXITCODE
     if ($PauseOnExit) { $null = Read-Host 'Press Enter to close' }
     exit $code

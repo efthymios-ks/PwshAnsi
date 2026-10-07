@@ -333,10 +333,11 @@ function Measure-AnsiTableRuns {
     $widest = 0
     $current = 0
     foreach ($run in $Runs) {
-        foreach ($segment in $run.Text.Split([char]10)) {
-            $current += $segment.Length
+        $segments = $run.Text.Split([char]10)
+        for ($i = 0; $i -lt $segments.Count; $i++) {
+            if ($i -gt 0) { $current = 0 }
+            $current += $segments[$i].Length
             if ($current -gt $widest) { $widest = $current }
-            $current = 0
         }
     }
     return $widest

@@ -23,7 +23,11 @@ Assert-PwshAnsi [-Arguments <hashtable>]
 
 1. **pwsh check.** If no pwsh 7.2+ is found on the machine it installs the latest stable
    release via the official MSI (one UAC prompt for `msiexec`), then reruns the script there.
-   If pwsh 7.2+ is already present it is used as-is — no update is attempted.
+   When the script was started from a classic Windows PowerShell console window the rerun
+   opens a Windows Terminal tab so PwshAnsi draws with a font that has the glyphs; Windows
+   Terminal itself is installed on first use through `winget` (per user, no UAC) when it is
+   missing. Otherwise the rerun stays in the same window. If pwsh 7.2+ is already present it
+   is used as-is — no update is attempted.
 
 2. **PwshAnsi update** *(unless `-SkipUpdate`)*.  
    Queries PSGallery for a newer version of PwshAnsi. If one exists it installs it for the
@@ -37,7 +41,20 @@ When both are already satisfied the function returns immediately with no output.
 
 The rerun carries the caller's parameters through a CLIXML temp file so arrays, booleans,
 switches, and hashtables survive intact. Each stage (`pwsh`, `module`) is marked in
-`$env:PWSHANSI_RERUN` to prevent infinite loops.
+`$env:PWSHANSI_RERUN` to prevent infinite loops. The marker is set as the first line of the
+rerun command, so a Windows Terminal tab (started by the terminal, not this process) inherits
+it too.
+
+| Started from | Rerun |
+| --- | --- |
+| Classic Windows PowerShell window, double-click, right-click > Run with PowerShell | New Windows Terminal tab on pwsh, old window exits with `0` |
+| Windows PowerShell tab inside Windows Terminal | Same tab |
+| Editor terminal, e.g. VS Code | Same window |
+| Redirected input or output, CI | Same window, exit code passed through |
+| `wt.exe` missing, `winget` available | Windows Terminal installed, then a tab opens |
+| `wt.exe` missing, `winget` also missing or offline | Same window |
+| Already on pwsh 7.2+ | No rerun |
+| Module update (stage `module`) | Same window |
 
 ## Example — minimal
 

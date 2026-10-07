@@ -477,6 +477,17 @@ Describe 'Format-AnsiTable — markup in cells' {
     It 'does not throw on invalid markup under -Escape' {
         { Invoke-Ansi { Format-AnsiTable @([PSCustomObject]@{ A = '[nosuch]x' }) -Escape } } | Should -Not -Throw
     }
+
+    It 'sizes a cell of several styled runs on their combined width' {
+        $rows = Invoke-AnsiPlain { Format-AnsiTable @([PSCustomObject]@{ A = 'ab[bold]cd[/]ef' }) -Wrap }
+        $rows.Count | Should -Be 5
+        $rows[3] | Should -BeExactly ($script:V + ' abcdef ' + $script:V)
+    }
+
+    It 'measures each line of a styled cell with a hard break on its own' {
+        $rows = Invoke-AnsiPlain { Format-AnsiTable @([PSCustomObject]@{ A = "ab[bold]c`nd[/]e" }) }
+        $rows[0].Length | Should -Be 7
+    }
 }
 
 Describe 'Format-AnsiTable — nested renderings' {
