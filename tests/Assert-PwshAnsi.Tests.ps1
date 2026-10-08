@@ -12,6 +12,44 @@ BeforeAll {
     $script:AnsiModule = Get-Module Assert-PwshAnsi
 }
 
+Describe 'Get-AnsiModuleStage' {
+    It 'names the update stage after the running edition' {
+        (& $script:AnsiModule { Get-AnsiModuleStage }) | Should -Be "module-$($PSVersionTable.PSEdition)"
+    }
+}
+
+Describe 'Update-PwshAnsiModule' {
+    BeforeEach {
+        $script:priorMarker = $env:PWSHANSI_RERUN
+    }
+    AfterEach {
+        if ($null -ne $script:priorMarker) { $env:PWSHANSI_RERUN = $script:priorMarker } else { Remove-Item env:PWSHANSI_RERUN -ErrorAction SilentlyContinue }
+    }
+
+    It 'skips the gallery when this edition already updated in this run' {
+        $env:PWSHANSI_RERUN = "pwsh,module-$($PSVersionTable.PSEdition)"
+        $checks = & $script:AnsiModule {
+            $script:galleryChecks = 0
+            function Find-Module { param($Name, $ErrorAction) $script:galleryChecks++; [pscustomobject]@{ Version = '99.0.0' } }
+            $null = Update-PwshAnsiModule -Current '0.1.0'
+            $script:galleryChecks
+        }
+        $checks | Should -Be 0
+    }
+
+    It 'still checks the gallery when only the other edition updated' {
+        $other = $(if ($PSVersionTable.PSEdition -eq 'Core') { 'Desktop' } else { 'Core' })
+        $env:PWSHANSI_RERUN = "module-$other,pwsh"
+        $checks = & $script:AnsiModule {
+            $script:galleryChecks = 0
+            function Find-Module { param($Name, $ErrorAction) $script:galleryChecks++; [pscustomobject]@{ Version = '0.1.0' } }
+            $null = Update-PwshAnsiModule -Current '0.1.0'
+            $script:galleryChecks
+        }
+        $checks | Should -Be 1
+    }
+}
+
 Describe 'Test-AnsiClassicConsole' {
     BeforeEach {
         $script:priorWt = $env:WT_SESSION

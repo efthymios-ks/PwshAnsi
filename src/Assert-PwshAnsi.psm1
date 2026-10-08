@@ -114,6 +114,12 @@ function Test-AnsiRerunStage {
     return ($done -split ',') -contains $Stage
 }
 
+# Windows PowerShell and pwsh each load their own copy of PwshAnsi, so the update stage is marked
+# per edition: an update in one must not stop the other from updating its own copy.
+function Get-AnsiModuleStage {
+    return "module-$($PSVersionTable.PSEdition)"
+}
+
 function ConvertTo-AnsiPortableArgument {
     param([hashtable]$Arguments = @{})
     $bound = @{}
@@ -256,7 +262,7 @@ function Update-AnsiPwsh {
 # Update failures log a yellow warning and return $false; they never throw.
 function Update-PwshAnsiModule {
     param([Parameter(Mandatory)][version]$Current)
-    if (Test-AnsiRerunStage 'module') { return $false }
+    if (Test-AnsiRerunStage (Get-AnsiModuleStage)) { return $false }
 
     $latest = $null
     try {
@@ -281,9 +287,11 @@ function Assert-PwshAnsi {
     .SYNOPSIS
         Ensures the calling script runs on pwsh 7.2+ with the latest PwshAnsi.
     .DESCRIPTION
-        1. If no pwsh 7.2+ is present, installs it and reruns the script there.
-        2. Unless -SkipUpdate is set, checks the gallery for a newer PwshAnsi and
-           reruns the script to load it when one is found.
+        1. Unless -SkipUpdate is set, checks the gallery for a newer PwshAnsi and
+           reruns the script to load it when one is found. Windows PowerShell and pwsh
+           keep separate copies, so each edition updates its own.
+        2. On Windows PowerShell, reruns the script on pwsh 7.2+, installing pwsh first
+           when none is present.
         Already on pwsh 7.2+ with the latest PwshAnsi (or -SkipUpdate): returns immediately.
         PwshAnsi gallery check or update fails: logs a warning and continues.
     .EXAMPLE
@@ -308,14 +316,14 @@ function Assert-PwshAnsi {
         }
     }
 
+    # The update comes first: on Windows PowerShell the move to pwsh ends this process, and the
+    # pwsh run only ever sees its own copy, so this is the one chance to update this edition's.
+    if (-not $SkipUpdate -and (Update-PwshAnsiModule -Current $MyInvocation.MyCommand.Module.Version)) {
+        Invoke-AnsiRerun -Pwsh (Get-Process -Id $PID).Path -ScriptPath $ScriptPath -Stage (Get-AnsiModuleStage) -Arguments $Arguments
+    }
+
     $pwsh = Update-AnsiPwsh
     if ($pwsh) { Invoke-AnsiRerun -Pwsh $pwsh -ScriptPath $ScriptPath -Stage 'pwsh' -Arguments $Arguments }
-
-    if ($SkipUpdate) { return }
-
-    $current = $MyInvocation.MyCommand.Module.Version
-    if (-not (Update-PwshAnsiModule -Current $current)) { return }
-    Invoke-AnsiRerun -Pwsh (Get-Process -Id $PID).Path -ScriptPath $ScriptPath -Stage 'module' -Arguments $Arguments
 }
 
 Export-ModuleMember -Function Assert-PwshAnsi

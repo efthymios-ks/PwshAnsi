@@ -47,9 +47,10 @@ Assert-PwshAnsi
 Format-AnsiText '[bold BrightGreen]Ready.[/]' | Out-AnsiHost
 ```
 
-`Assert-PwshAnsi` installs pwsh 7.2+ if missing and reruns there,
-in a Windows Terminal tab when started from a classic console window,
-then checks for a newer PwshAnsi and reloads.
+`Assert-PwshAnsi` checks for a newer PwshAnsi and reloads,
+in Windows PowerShell and pwsh alike since each keeps its own copy,
+then installs pwsh 7.2+ if missing and reruns there,
+in a Windows Terminal tab when started from a classic console window.
 See [`Assert-PwshAnsi`](docs/Assert-PwshAnsi.md).
 
 ## Redraw on resize

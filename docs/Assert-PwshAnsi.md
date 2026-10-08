@@ -21,26 +21,29 @@ Assert-PwshAnsi [-Arguments <hashtable>]
 
 ## What it does
 
-1. **pwsh check.** If no pwsh 7.2+ is found on the machine it installs the latest stable
-   release via the official MSI (one UAC prompt for `msiexec`), then reruns the script there.
-   When the script was started from a classic Windows PowerShell console window the rerun
-   opens a Windows Terminal tab so PwshAnsi draws with a font that has the glyphs; Windows
-   Terminal itself is installed on first use through `winget` (per user, no UAC) when it is
-   missing. Otherwise the rerun stays in the same window. If pwsh 7.2+ is already present it
-   is used as-is — no update is attempted.
-
-2. **PwshAnsi update** *(unless `-SkipUpdate`)*.  
+1. **PwshAnsi update** *(unless `-SkipUpdate`)*.  
    Queries PSGallery for a newer version of PwshAnsi. If one exists it installs it for the
    current user and reruns the script so the new version is loaded.  
+   Windows PowerShell and pwsh keep separate copies (`Documents\WindowsPowerShell\Modules`
+   and `Documents\PowerShell\Modules`), so each edition checks and updates its own. On
+   Windows PowerShell this runs before the move to pwsh, which ends that process.  
    If the gallery is unreachable or the install fails, a yellow warning is printed and the
    script continues on the currently loaded version.
+
+2. **pwsh check.** On Windows PowerShell the script reruns on pwsh 7.2+. If none is found on
+   the machine it installs the latest stable release via the official MSI (one UAC prompt for
+   `msiexec`) first. When the script was started from a classic Windows PowerShell console
+   window the rerun opens a Windows Terminal tab so PwshAnsi draws with a font that has the
+   glyphs; Windows Terminal itself is installed on first use through `winget` (per user, no
+   UAC) when it is missing. Otherwise the rerun stays in the same window. If pwsh 7.2+ is
+   already present it is used as-is — no update is attempted.
 
 When both are already satisfied the function returns immediately with no output.
 
 ## Behaviour on rerun
 
 The rerun carries the caller's parameters through a CLIXML temp file so arrays, booleans,
-switches, and hashtables survive intact. Each stage (`pwsh`, `module`) is marked in
+switches, and hashtables survive intact. Each stage (`module-Desktop`, `pwsh`, `module-Core`) is marked in
 `$env:PWSHANSI_RERUN` to prevent infinite loops. The marker is set as the first line of the
 rerun command, so a Windows Terminal tab (started by the terminal, not this process) inherits
 it too.
@@ -54,7 +57,7 @@ it too.
 | `wt.exe` missing, `winget` available | Windows Terminal installed, then a tab opens |
 | `wt.exe` missing, `winget` also missing or offline | Same window |
 | Already on pwsh 7.2+ | No rerun |
-| Module update (stage `module`) | Same window |
+| Module update (stage `module-Desktop` or `module-Core`) | Same window |
 
 ## Example — minimal
 
