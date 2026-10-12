@@ -30,6 +30,8 @@ function Read-AnsiSelection {
 
         [string]$GroupChoicesProperty = 'Choices',
 
+        [object]$Selected,
+
         [Alias('Color')]
         [string]$CursorColor = 'BrightCyan',
 
@@ -98,7 +100,14 @@ function Read-AnsiSelection {
         $focus = Get-AnsiChoiceFocus -Rows $items
         if ($focus.Count -eq 0) { throw 'Read-AnsiSelection needs at least one choice.' }
 
+        # -Selected matches by value against the original item; no match leaves
+        # the cursor at the first row.
         $index = $focus[0]
+        if ($PSBoundParameters.ContainsKey('Selected')) {
+            foreach ($f in $focus) {
+                if ($items[$f].Item -eq $Selected) { $index = $f; break }
+            }
+        }
         $window = Get-AnsiChoiceWindow -Index $index -Count $items.Count -PageSize $PageSize
         $drawn = 0
         $frameTop = -1   # anchored frame's top row, captured on first paint

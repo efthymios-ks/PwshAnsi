@@ -13,6 +13,7 @@ rows throughout.
 Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
                   [-LabelProperty <string>]
                   [-Grouped] [-GroupLabelProperty <string>] [-GroupChoicesProperty <string>]
+                  [-Selected <object>]
                   [-Overflow <Fold|Crop|Ellipsis>]
                   [-CursorColor <string>] [-TitleColor <string>] [-ChoiceColor <string>]
                   [-GroupColor <string>] [-HintColor <string>] [-PageSize <int>]
@@ -30,6 +31,7 @@ Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
 | `-Grouped`        | off            | `-Choices` are groups, not items: a header and its members. See [Groups](#groups). |
 | `-GroupLabelProperty`   | `Name`   | Property each group's header text is read from.                                  |
 | `-GroupChoicesProperty` | `Choices` | Property each group's members are read from. `Group` for `Group-Object` output. |
+| `-Selected`       | none           | Item to start the cursor on, matched by value against `-Choices`. No match lands on the first row. |
 | `-CursorColor`    | `BrightCyan`   | Colour of the `›` marker and the row it is on. `-Color` aliases it.              |
 | `-TitleColor`     | none           | Colour of the title. Markup inside it wins.                                     |
 | `-ChoiceColor`    | none           | Colour of the other rows.                                                       |
@@ -231,19 +233,21 @@ literal list and `Group-Object` output, and choosing a deploy target.
 
 ## Tests
 
-`tests/Read-AnsiSelection.Tests.ps1` — 48 Pester 5 tests. The console seams are
+`tests/Read-AnsiSelection.Tests.ps1` — 52 Pester 5 tests. The console seams are
 replaced in the module scope, so scripted keys drive the prompt and the painted
 rows are asserted frame by frame. Covers every movement key, the ends of the list,
 paging and the scrolling window, the position counter, the cursor marker, in-place
-redraw, `-LabelProperty` and object identity, pipeline input, markup and `-Escape`,
-Esc, timeouts, empty choices, the redirected-input error, and `NO_COLOR` — and for
-`-Grouped`: the drawn headers and indented members, headers skipped by every
-movement key, page moves snapping onto an item, the item-only counter, labels and
-object identity inside groups, `Group-Object` input, `-GroupColor`, empty groups,
-and both malformed-group errors — and for `-Hotkeys`: the collision throw on both a
-reserved char and a reserved key name, the hint splice, an action moving the
-cursor, an action deciding with its own answer, an action setting a note, and the
-row-count stability without `-Hotkeys`.
+redraw, `-LabelProperty` and object identity, `-Selected` matching, falling back
+to the first row, and resolving by object identity, pipeline input, markup and
+`-Escape`, Esc, timeouts, empty choices, the redirected-input error, and
+`NO_COLOR` — and for `-Grouped`: the drawn headers and indented members, headers
+skipped by every movement key, page moves snapping onto an item, the item-only
+counter, labels and object identity inside groups, `-Selected` skipping headers,
+`Group-Object` input, `-GroupColor`, empty groups, and both malformed-group
+errors — and for `-Hotkeys`: the collision throw on both a reserved char and a
+reserved key name, the hint splice, an action moving the cursor, an action
+deciding with its own answer, an action setting a note, and the row-count
+stability without `-Hotkeys`.
 
 ```powershell
 pwsh -File .\Invoke-Test.ps1 -Path .\tests\Read-AnsiSelection.Tests.ps1

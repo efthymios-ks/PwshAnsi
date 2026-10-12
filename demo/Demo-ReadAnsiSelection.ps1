@@ -77,6 +77,11 @@ Show-DemoHeader '6. -TimeoutSeconds 5'
 $timed = Read-AnsiSelection 'Quick, pick one' $fruit -TimeoutSeconds 5
 Show-Answer 'Fruit' $timed
 
+# 6b. -Selected — the cursor starts on the pre-chosen row
+Show-DemoHeader '6b. -Selected (cursor starts on Cherry)'
+$preselected = Read-AnsiSelection 'Pick a fruit' $fruit -Selected 'Cherry'
+Show-Answer 'Fruit' $preselected
+
 # 7. Groups — headers are shape only, the cursor moves straight past them
 Show-DemoHeader '7. -Grouped (headers are view only)'
 $grouped = @(

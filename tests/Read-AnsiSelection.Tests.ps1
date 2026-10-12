@@ -119,6 +119,38 @@ Describe 'Read-AnsiSelection — moving and choosing' {
         $result.Value | Should -BeExactly 'apple'
     }
 
+    It 'starts on -Selected when it matches' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Fruit -Selected 'cherry' }
+        $result.Value | Should -BeExactly 'cherry'
+
+        $frame = Get-FinalFrame -Result $result -Title 'Pick'
+        $frame[3] | Should -BeExactly ($script:Cursor + ' cherry')
+    }
+
+    It 'falls back to the first choice when -Selected matches nothing' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Fruit -Selected 'kumquat' }
+        $result.Value | Should -BeExactly 'apple'
+    }
+
+    It 'resolves -Selected by object identity, not label' {
+        $items = @(
+            [PSCustomObject]@{ Name = 'alpha'; Id = 1 }
+            [PSCustomObject]@{ Name = 'beta'; Id = 2 }
+            [PSCustomObject]@{ Name = 'gamma'; Id = 3 }
+        )
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $items -LabelProperty Name -Selected $items[2] }
+        $result.Value.Id | Should -Be 3
+    }
+
+    It 'skips headers when matching -Selected under -Grouped' {
+        Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @((New-Key -Key Enter))
+        $result = Invoke-Prompt { Read-AnsiSelection 'Pick' $script:Groups -Grouped -Selected 'lime' }
+        $result.Value | Should -BeExactly 'lime'
+    }
+
     It 'moves down with the arrow keys' {
         Set-AnsiTestKeys -Module Read-AnsiSelection -Keys @(
             (New-Key -Key DownArrow), (New-Key -Key DownArrow), (New-Key -Key Enter)
