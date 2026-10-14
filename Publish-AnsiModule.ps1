@@ -31,7 +31,7 @@
     gallery reads.
 
 .PARAMETER OutputPath
-    Where to build. Default .rtifacts.
+    Where to build. Default .\artifacts.
 
 .PARAMETER Repository
     Repository to publish to. Default PSGallery. Only used with -Publish.

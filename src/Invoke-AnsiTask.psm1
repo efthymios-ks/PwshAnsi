@@ -17,6 +17,9 @@
 # count on its own — which puts a fraction in the count ("0.5/1"), so -ProgressShow
 # Percent is usually the one to reach for there.
 #
+# $task.Skip(reason) ends the step as skipped, and $task.Stop(reason) ends the run
+# after the step, so a caller can stop cleanly without throwing.
+#
 # When output is redirected the bar is not redrawn in place — every state would be
 # a separate line in the log. Text still prints, so a CI transcript stays readable.
 
@@ -24,12 +27,21 @@ Import-Module (Join-Path $PSScriptRoot 'Ansi.Core.psm1') -Force -DisableNameChec
 Import-Module (Join-Path $PSScriptRoot 'Format-AnsiText.psm1') -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot 'Format-AnsiProgress.psm1') -DisableNameChecking
 Import-Module (Join-Path $PSScriptRoot 'Out-AnsiHost.psm1') -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot 'Out-AnsiString.psm1') -DisableNameChecking
 
 $script:AnsiTaskMark = @{
     'running' = [string][char]0x2192   # →
     'done'    = [string][char]0x2714   # ✔
     'failed'  = [string][char]0x2718   # ✘
     'skipped' = [string][char]0x00B7   # ·
+    'stopped' = [string][char]0x21BB   # ↻
+}
+
+$script:AnsiTaskStatusName = @{
+    'done'    = 'Done'
+    'failed'  = 'Failed'
+    'skipped' = 'Skipped'
+    'stopped' = 'Stopped'
 }
 
 function Invoke-AnsiTask {
@@ -40,7 +52,8 @@ function Invoke-AnsiTask {
         [string]$Name,
 
         # One step: what to run. It receives the task control object, so a long step
-        # can call $task.Update(value, total) or $task.Write('message').
+        # can call $task.Update(value, total), $task.Write('message'),
+        # $task.Skip('reason') or $task.Stop('reason').
         [Parameter(ParameterSetName = 'Single', Position = 1, Mandatory)]
         [scriptblock]$ScriptBlock,
 
@@ -75,7 +88,7 @@ function Invoke-AnsiTask {
         # Leave the finished steps on screen. Off: the bar is cleared at the end.
         [switch]$KeepBar,
 
-        # Emit a result object per step: Name, Ok, Duration, Error.
+        # Emit a result object per step: Name, Ok, Status, Reason, Duration, Error.
         [switch]$PassThru
     )
 
@@ -97,12 +110,16 @@ function Invoke-AnsiTask {
         BarColor     = $BarColor
         EmptyColor   = $EmptyColor
         BarLines     = 0        # bar rows currently on screen, to redraw over
+        MessageLines = 0        # rows $task.Write printed under the running step
         Live         = (Test-AnsiTaskLive)
         Fraction     = 0.0      # progress inside the running step, 0..1
+        StepStatus   = $null    # 'skipped' or 'stopped', set from inside the step
+        StepReason   = ''
     }
 
     $results = [System.Collections.Generic.List[object]]::new()
     $failure = $null
+    $stopped = $false
 
     if ($null -ne $script:AnsiTaskCurrent) {
         throw 'A task is already running; Invoke-AnsiTask does not nest.'
@@ -111,6 +128,8 @@ function Invoke-AnsiTask {
     try {
     foreach ($step in $steps) {
         $state.Fraction = 0.0
+        $state.StepStatus = $null
+        $state.StepReason = ''
         Write-AnsiTaskLine -State $state -Step $step -Status 'running'
         Write-AnsiTaskBar -State $state
 
@@ -119,7 +138,8 @@ function Invoke-AnsiTask {
         $errorRecord = $null
 
         try {
-            # The control object lets a step move the bar and print beside it.
+            # The control object lets a step move the bar, print beside it, and end itself
+            # or the run early.
             $control = New-AnsiTaskControl -State $state -Step $step
             & $step.Script $control
         } catch {
@@ -129,33 +149,41 @@ function Invoke-AnsiTask {
         }
         $started.Stop()
 
+        $status = if (-not $ok) { 'failed' } elseif ($state.StepStatus) { $state.StepStatus } else { 'done' }
+        $reason = if ($ok) { $state.StepReason } else { '' }
+        $duration = if ($status -eq 'skipped') { [TimeSpan]::Zero } else { $started.Elapsed }
+
         $state.Index++
         $state.Fraction = 0.0
-        Write-AnsiTaskLine -State $state -Step $step -Status $(if ($ok) { 'done' } else { 'failed' }) `
-            -Duration $started.Elapsed -Replace
+        Write-AnsiTaskLine -State $state -Step $step -Status $status -Duration $duration -Reason $reason -Replace
         Write-AnsiTaskBar -State $state
 
         $null = $results.Add([PSCustomObject]@{
                 PSTypeName = 'PwshAnsi.TaskResult'
                 Name       = $step.Name
                 Ok         = $ok
+                Status     = $script:AnsiTaskStatusName[$status]
+                Reason     = $reason
                 Duration   = $started.Elapsed
                 Error      = $errorRecord
             })
 
         if ($null -ne $failure) { break }
+        if ($status -eq 'stopped') { $stopped = $true; break }
     }
     } finally {
         $script:AnsiTaskCurrent = $null
     }
 
     # Steps never reached, so a -PassThru caller sees the whole list either way.
-    if ($null -ne $failure) {
+    if ($null -ne $failure -or $stopped) {
         for ($i = $state.Index; $i -lt $steps.Count; $i++) {
             $null = $results.Add([PSCustomObject]@{
                     PSTypeName = 'PwshAnsi.TaskResult'
                     Name       = $steps[$i].Name
                     Ok         = $false
+                    Status     = 'NotRun'
+                    Reason     = ''
                     Duration   = [TimeSpan]::Zero
                     Error      = $null
                 })
@@ -222,6 +250,14 @@ function New-AnsiTaskControl {
         param([string]$Message)
         Write-AnsiTaskMessage -Message $Message
     }
+    $control | Add-Member -MemberType ScriptMethod -Name Skip -Value {
+        param([string]$Reason = '')
+        Set-AnsiTaskStatus -Status 'skipped' -Reason $Reason
+    }
+    $control | Add-Member -MemberType ScriptMethod -Name Stop -Value {
+        param([string]$Reason = '')
+        Set-AnsiTaskStatus -Status 'stopped' -Reason $Reason
+    }
     return $control
 }
 
@@ -244,8 +280,27 @@ function Write-AnsiTaskMessage {
     if ($null -eq $script:AnsiTaskCurrent) { return }
     $state = $script:AnsiTaskCurrent
     Remove-AnsiTaskBar -State $state
-    Format-AnsiText "  $Message" -Color DarkGray | Out-AnsiHost
+    $rendering = Format-AnsiText "  $Message" -Color DarkGray
+    $rendering | Out-AnsiHost
+    $state.MessageLines += @($rendering | Out-AnsiString).Count
     Write-AnsiTaskBar -State $state
+}
+
+# Stop outranks skip: a step that asks for both still ends the run.
+function Set-AnsiTaskStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('skipped', 'stopped')][string]$Status,
+        [AllowEmptyString()][string]$Reason = ''
+    )
+    if ($null -eq $script:AnsiTaskCurrent) { return }
+    $state = $script:AnsiTaskCurrent
+    if ($Status -eq 'skipped' -and $state.StepStatus -eq 'stopped') {
+        if (-not $state.StepReason) { $state.StepReason = $Reason }
+        return
+    }
+    $state.StepStatus = $Status
+    if ($Reason) { $state.StepReason = $Reason }
 }
 
 # --- painting ---------------------------------------------------------------------
@@ -263,6 +318,7 @@ function Write-AnsiTaskLine {
         [Parameter(Mandatory)][object]$Step,
         [Parameter(Mandatory)][string]$Status,
         [TimeSpan]$Duration = [TimeSpan]::Zero,
+        [AllowEmptyString()][string]$Reason = '',
         # Rewrite the running line rather than adding one.
         [switch]$Replace
     )
@@ -270,24 +326,33 @@ function Write-AnsiTaskLine {
 
     # A finished step replaces its own running line, but only on a live terminal:
     # in a log both lines are worth keeping, so the redirected path only prints
-    # the finished one.
+    # the finished one. Messages the step wrote stay where they are, under it.
+    # Once the running line has scrolled out of the window it cannot be reached,
+    # so the finished line is added under the messages instead.
+    $below = 0
     if ($Replace) {
         if ($State.Live) {
             Remove-AnsiTaskBar -State $State
-            Move-AnsiCursorUp -Lines 1
-            Clear-AnsiLine
+            $up = 1 + $State.MessageLines
+            if ($up -lt (Get-AnsiTaskWindowHeight)) {
+                Move-AnsiCursorUp -Lines $up
+                Clear-AnsiLine
+                $below = $State.MessageLines
+            }
         }
     } elseif ($Status -eq 'running' -and -not $State.Live) {
         return
     } else {
         Remove-AnsiTaskBar -State $State
     }
+    $State.MessageLines = 0
 
     $mark = $script:AnsiTaskMark[$Status]
     $color = switch ($Status) {
         'done' { 'BrightGreen' }
         'failed' { 'BrightRed' }
         'skipped' { 'DarkGray' }
+        'stopped' { 'BrightYellow' }
         default { 'BrightCyan' }
     }
     $name = ($Step.Name -replace '\[', '[[') -replace '\]', ']]'
@@ -295,7 +360,19 @@ function Write-AnsiTaskLine {
     if ($Duration -ne [TimeSpan]::Zero) {
         $line += "  [DarkGray]$(Format-AnsiTaskDuration -Duration $Duration)[/]"
     }
+    if ($Reason) {
+        $reasonColor = if ($Status -eq 'stopped') { 'BrightYellow' } else { 'DarkGray' }
+        $line += "  [$reasonColor]$(($Reason -replace '\[', '[[') -replace '\]', ']]')[/]"
+    }
     Format-AnsiText $line | Out-AnsiHost
+    if ($below -gt 0) { Write-Host ("$([char]27)[${below}B") -NoNewline }
+}
+
+# A host that cannot say how tall it is counts as tall enough.
+function Get-AnsiTaskWindowHeight {
+    try { $height = $Host.UI.RawUI.WindowSize.Height } catch { $height = 0 }
+    if ($height -le 0) { return [int]::MaxValue }
+    return $height
 }
 
 function Write-AnsiTaskBar {

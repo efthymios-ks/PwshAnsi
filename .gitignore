@@ -1,4 +1,4 @@
-# Built module, produced by Publish-InkModule.ps1
+# Built module, produced by Publish-AnsiModule.ps1
 artifacts/
 
 # Test results, when Invoke-Test.ps1 is asked for them

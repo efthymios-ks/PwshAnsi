@@ -116,6 +116,32 @@ $rows = $results | ForEach-Object {
 }
 Format-AnsiTable $rows -Border Rounded -BorderColor DarkGray -HeaderColor BrightCyan | Out-AnsiHost
 
+# 8b. $task.Skip() and $task.Stop()
+Show-DemoHeader '8b. $task.Skip() and $task.Stop() — end a step or the run early'
+$ended = Invoke-AnsiTask -PassThru -ProgressShow Percent -Task @(
+    @{
+        Name   = 'Install Git'
+        Script = {
+            param($task)
+            Start-Sleep -Milliseconds 300
+            $task.Skip('already there')
+        }
+    }
+    @{
+        Name   = 'Install SDK'
+        Script = {
+            param($task)
+            Start-Sleep -Milliseconds 400
+            $task.Write('installer exited with 3010')
+            Start-Sleep -Milliseconds 400
+            $task.Stop('restart needed')
+        }
+    }
+    @{ Name = 'Build'; Script = { Start-Sleep -Milliseconds 400 } }
+)
+Format-AnsiTable ($ended | Select-Object Name, Status, Reason) -Border Rounded -BorderColor DarkGray -HeaderColor BrightCyan |
+    Out-AnsiHost
+
 # 9. Styles and colours
 Show-DemoHeader '9. -Style and the bar colours'
 Invoke-AnsiTask -Show Bar -KeepBar -Style Ascii -BarColor BrightGreen -EmptyColor DarkGray -Task @(

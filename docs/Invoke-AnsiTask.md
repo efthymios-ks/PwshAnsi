@@ -73,6 +73,8 @@ The scriptblock is called with a task control object — `param($task)`, or
 | `$task.Count`     | How many steps in this run.                               |
 | `$task.Update(v, total)` | Move the bar within this step.                     |
 | `$task.Write(msg)`| Print a line above the bar.                               |
+| `$task.Skip(reason)` | End this step as skipped once it returns.              |
+| `$task.Stop(reason)` | End the run once this step returns.                    |
 
 ```powershell
 Invoke-AnsiTask 'Copying files' {
@@ -88,6 +90,46 @@ Invoke-AnsiTask 'Copying files' {
 Without `Update`, the bar counts whole steps. With it, a long step fills its own
 share of the bar instead of sitting still.
 
+A `Write` line stays under its step.  
+The finished line still replaces the running one above it.
+
+## Ending early
+
+`Skip` and `Stop` mark the step and let it return normally.  
+Neither leaves the scriptblock by itself, so `return` right after when there is nothing left to do.
+
+```powershell
+$installGit = {
+    param($task)
+    if (Get-Command git -ErrorAction Ignore) {
+        $task.Skip('already there')
+        return
+    }
+    winget install Git.Git
+}
+$installSdk = {
+    param($task)
+    Install-Sdk
+    $task.Stop('restart needed')
+}
+
+Invoke-AnsiTask -Task @(
+    @{ Name = 'Install Git'; Script = $installGit }
+    @{ Name = 'Install SDK'; Script = $installSdk }
+    @{ Name = 'Build'; Script = { dotnet build } }
+)
+```
+
+```
+· Install Git  already there
+↻ Install SDK  42.0s  restart needed
+```
+
+`Skip` prints `·` with the reason and no time.  
+`Stop` prints `↻` with the time and the reason, and the steps after it never run.  
+A step that calls both ends the run.  
+A step that throws after either one is still a failure.
+
 ## Output and failure
 
 The scriptblock's own output passes straight through — progress goes to the host,
@@ -99,13 +141,15 @@ $packages = Invoke-AnsiTask 'Querying' { Find-Module -Tag ansi }
 
 A step that throws is marked `✘`, and the error is rethrown once the run stops.
 `-ContinueOnError` runs the rest first. `-PassThru` emits one `PwshAnsi.TaskResult` per
-step — including the steps a failure prevented, so the list always matches what was
+step — including the steps a failure or a `Stop` prevented, so the list always matches what was
 asked for:
 
 | Property   | Meaning                                       |
 | ---------- | --------------------------------------------- |
 | `Name`     | The step's name.                              |
 | `Ok`       | `$true` when it finished without throwing.    |
+| `Status`   | `Done`, `Skipped`, `Stopped`, `Failed` or `NotRun`. |
+| `Reason`   | What `Skip` or `Stop` was given, or empty.    |
 | `Duration` | A `[TimeSpan]`. Never reached steps are zero. |
 | `Error`    | The `ErrorRecord`, or `$null`.                |
 
@@ -134,8 +178,8 @@ pwsh -File .\demo\Demo-AnsiTask.ps1
 ```
 
 One step and many, each `-Show` mode, `$task.Update()` and `$task.Write()`, a
-failing step, `-ContinueOnError` with `-PassThru` into a table, styles and colours,
-and a release run end to end.
+failing step, `-ContinueOnError` with `-PassThru` into a table, `Skip` and `Stop`,
+styles and colours, and a release run end to end.
 
 ## Tests
 
