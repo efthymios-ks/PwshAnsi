@@ -65,6 +65,12 @@ Read-AnsiMultiSelection [-Title] <string> [-Choices] <object[]>
 Without `-ToggleGroups` the cursor moves straight past the headers, so every key
 lands on an item.
 
+<!-- demo-media -->
+![1. Tick a few (space, then enter)](media/ReadAnsiMultiSelection/1.gif)
+
+![2. Press a to select all (again to clear)](media/ReadAnsiMultiSelection/2.gif)
+<!-- /demo-media -->
+
 ## What it draws
 
 ```
@@ -77,6 +83,14 @@ Which suites?
 
 A position counter is prefixed when the list is longer than `-PageSize`, and the
 row under the hint carries the `-Required` message when Enter is refused.
+
+<!-- demo-media -->
+![3. -Selected pre-ticks items](media/ReadAnsiMultiSelection/3.gif)
+
+![4. -PageSize 4 (the window scrolls with the cursor)](media/ReadAnsiMultiSelection/4.gif)
+
+![7. -CursorColor / -MarkColor / -TitleColor / -ChoiceColor](media/ReadAnsiMultiSelection/7.gif)
+<!-- /demo-media -->
 
 ## Groups
 
@@ -155,6 +169,14 @@ Group 'Layout' has no Choices. Give every group its choices, or name the propert
 Read-AnsiMultiSelection -ToggleGroups needs -Grouped: there are no groups to toggle.
 ```
 
+<!-- demo-media -->
+![9. -Grouped (headers are view only)](media/ReadAnsiMultiSelection/9.gif)
+
+![10. -ToggleGroups (space on a header sets or clears it all)](media/ReadAnsiMultiSelection/10.gif)
+
+![11. -Grouped over Group-Object (-GroupChoicesProperty Group)](media/ReadAnsiMultiSelection/11.gif)
+<!-- /demo-media -->
+
 ## Hotkeys
 
 `-Hotkeys` layers extra keys on top of the built-ins — a Refresh, an Invert, a
@@ -199,6 +221,10 @@ A caller who tries to rebind a built-in — `Enter`, `Escape`, arrows, `Home/End
 Read-AnsiMultiSelection -Hotkeys: 'Spacebar' is a reserved default key.
 ```
 
+<!-- demo-media -->
+![12. -Hotkeys (I inverts every tick)](media/ReadAnsiMultiSelection/12.gif)
+<!-- /demo-media -->
+
 ## Returning objects
 
 ```powershell
@@ -212,6 +238,10 @@ Format-AnsiTable @($chosen) | Out-AnsiHost      # the objects came back
 
 Results come back in list order, not in the order they were ticked.
 
+<!-- demo-media -->
+![6. -LabelProperty (returns the objects)](media/ReadAnsiMultiSelection/6.gif)
+<!-- /demo-media -->
+
 ## Empty results, cancel, and timeout
 
 | Outcome              | Value          |
@@ -222,6 +252,12 @@ Results come back in list order, not in the order they were ticked.
 | Timeout               | `$null`        |
 
 `-Required` turns the first case into a re-prompt instead.
+
+<!-- demo-media -->
+![5. -Required (press enter with nothing ticked first)](media/ReadAnsiMultiSelection/5.gif)
+
+![8. -TimeoutSeconds 5](media/ReadAnsiMultiSelection/8.gif)
+<!-- /demo-media -->
 
 ## Non-interactive and NO_COLOR
 
@@ -256,6 +292,10 @@ $rows = foreach ($step in $all) {
 }
 Format-AnsiPanel (Format-AnsiGrid $rows -Padding 3) -Title 'Plan' | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![13. Usage pattern — run only what was ticked](media/ReadAnsiMultiSelection/13.gif)
+<!-- /demo-media -->
 
 ## Demo
 

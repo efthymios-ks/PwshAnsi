@@ -75,6 +75,14 @@ first, so it means two and a half on a comma locale too. A value that is not a
 number throws, as does an item with no value at all and an unknown colour. `null`
 items are skipped, negative values are ignored, and no items at all renders nothing.
 
+<!-- demo-media -->
+![1. Objects with Label, Value and Color](media/AnsiBreakdownChart/1.png)
+
+![8. -LabelProperty / -ValueProperty / -ColorProperty](media/AnsiBreakdownChart/8.png)
+
+![9. Straight off the pipeline](media/AnsiBreakdownChart/9.png)
+<!-- /demo-media -->
+
 ## The bar
 
 Cells are whole, and they add up: the parts are handed out by largest remainder, so
@@ -89,6 +97,12 @@ not add up to its width says so.
 | `Line`   | `━`    | `─`   |
 | `Dots`   | `●`    | `·`   |
 | `Ascii`  | `#`    | `-`   |
+
+<!-- demo-media -->
+![6. -Style Blocks / Line / Dots / Ascii](media/AnsiBreakdownChart/6.png)
+
+![7. Cells add up, and a small part still shows](media/AnsiBreakdownChart/7.png)
+<!-- /demo-media -->
 
 ## The legend
 
@@ -110,6 +124,16 @@ Tags take markup, `-Markdown`, and `-Escape` like every other component; see
 [Markup and markdown](Markup.md). A legend entry is one line, so a hard break in a
 tag collapses to a space.
 
+<!-- demo-media -->
+![2. -HideTags, -HideTagValues, -ShowPercentage](media/AnsiBreakdownChart/2.png)
+
+![3. -FullSize — one tag per row](media/AnsiBreakdownChart/3.png)
+
+![4. A legend wider than the chart wraps](media/AnsiBreakdownChart/4.png)
+
+![10. Markup and markdown in the tags](media/AnsiBreakdownChart/10.png)
+<!-- /demo-media -->
+
 ## Width
 
 Like every component, the default width runs from the cursor to the right edge, so a
@@ -127,6 +151,10 @@ unless `-TagColor` says otherwise. Under `NO_COLOR` or redirected output the lay
 is unchanged and the styling is dropped — which is why the parts are still one bar
 of identical characters, not a lie about who owns which cell.
 
+<!-- demo-media -->
+![5. -Palette, -TagColor, -ValueColor](media/AnsiBreakdownChart/5.png)
+<!-- /demo-media -->
+
 ## Nesting
 
 It is a rendering, so it goes wherever one goes — a panel's content, a grid cell, a
@@ -141,6 +169,10 @@ Format-AnsiTable @(
 ) -Border Rounded | Out-AnsiHost
 ```
 
+<!-- demo-media -->
+![11. Nested — a chart inside a panel, a grid, and a table](media/AnsiBreakdownChart/11.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -152,6 +184,14 @@ wrapping, `-Palette`, `-TagColor` and `-ValueColor`, all four styles, the cell
 arithmetic including a part too small to round up, the `-*Property` names, markup in
 tags, charts nested in a panel, a grid and a table, anchoring, and two panes side by
 side.
+
+<!-- demo-media -->
+![12. A rule, a bar, a legend](media/AnsiBreakdownChart/12.png)
+
+![13. Anchoring, and -NoNewline](media/AnsiBreakdownChart/13.png)
+
+![14. Two panes — left and right](media/AnsiBreakdownChart/14.png)
+<!-- /demo-media -->
 
 ## Tests
 

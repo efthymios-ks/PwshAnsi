@@ -51,6 +51,12 @@ burst ends on submits, which is what typing Enter is.
 
 Control characters are ignored.
 
+<!-- demo-media -->
+![1. Read-AnsiText — a plain question](media/ReadAnsiText/1.gif)
+
+![4. -Secret masks what you type](media/ReadAnsiText/4.gif)
+<!-- /demo-media -->
+
 ## Empty answers, defaults, validation
 
 An empty answer with no `-Default` and no `-AllowEmpty` re-prompts with
@@ -64,6 +70,14 @@ Read-AnsiText 'Port' -Validate { param($v) $v -match '^\d+$' } -ValidationMessag
 Read-AnsiText 'API key' -Secret
 Read-AnsiText '[bold]Environment[/] :rocket:' -Markdown -Default 'Dev'
 ```
+
+<!-- demo-media -->
+![2. -Default (press Enter to take it)](media/ReadAnsiText/2.gif)
+
+![5. -Validate (digits only, try letters first)](media/ReadAnsiText/5.gif)
+
+![6. -AllowEmpty (just press Enter)](media/ReadAnsiText/6.gif)
+<!-- /demo-media -->
 
 ## Non-interactive and NO_COLOR
 
@@ -109,6 +123,12 @@ pwsh -File .\demo\Demo-ReadAnsiText.ps1
 
 Interactive: a plain question, `-Default`, markup prompts with `-AnswerColor`,
 `-Secret`, `-Validate`, `-AllowEmpty`, and a timeout.
+
+<!-- demo-media -->
+![3. Markup in the prompt, -AnswerColor for the answer](media/ReadAnsiText/3.gif)
+
+![7. -TimeoutSeconds 5 (wait it out to see $null)](media/ReadAnsiText/7.gif)
+<!-- /demo-media -->
 
 ## Tests
 

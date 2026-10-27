@@ -85,6 +85,14 @@ first, so it means two and a half on a comma locale too. A value that is not a
 number throws, as does an item with no value at all and an unknown colour. `null`
 items are skipped, and no items at all renders nothing.
 
+<!-- demo-media -->
+![1. Objects with Label, Value and Color](media/AnsiBarChart/1.png)
+
+![9. -LabelProperty / -ValueProperty / -ColorProperty](media/AnsiBarChart/9.png)
+
+![10. Straight off the pipeline](media/AnsiBarChart/10.png)
+<!-- /demo-media -->
+
 ## The bars
 
 Whole cells only — no partial blocks, so the same data always draws the same chart.
@@ -98,6 +106,12 @@ Zero draws nothing, and so does a negative value, which is still printed.
 | `Line`   | `━`    |
 | `Dots`   | `●`    |
 | `Ascii`  | `#`    |
+
+<!-- demo-media -->
+![8. -Style Blocks / Line / Dots / Ascii](media/AnsiBarChart/8.png)
+
+![13. A value past zero always keeps a cell](media/AnsiBarChart/13.png)
+<!-- /demo-media -->
 
 ## Labels and values
 
@@ -114,6 +128,18 @@ Labels take markup, `-Markdown`, and `-Escape` like every other component; see
 [Markup and markdown](Markup.md). A chart row is one line, so a hard break in a
 label collapses to a space.
 
+<!-- demo-media -->
+![2. -Label (or -Title) above the chart](media/AnsiBarChart/2.png)
+
+![3. -TitleAlignment Left / Center / Right](media/AnsiBarChart/3.png)
+
+![5. -HideValues, -ShowPercentage, -ValueFormat](media/AnsiBarChart/5.png)
+
+![6. -LabelWidth, -LabelAlignment, -LabelColor](media/AnsiBarChart/6.png)
+
+![11. Markup and markdown in the labels](media/AnsiBarChart/11.png)
+<!-- /demo-media -->
+
 ## Width
 
 Like every component, the default width runs from the cursor to the right edge.
@@ -126,6 +152,10 @@ Format-AnsiBarChart $q1 -BarWidth 24 -LabelWidth 10
 Format-AnsiBarChart $q2 -BarWidth 24 -LabelWidth 10
 ```
 
+<!-- demo-media -->
+![7. -MaxValue and -BarWidth](media/AnsiBarChart/7.png)
+<!-- /demo-media -->
+
 ## Colour
 
 Colours come from the shared vocabulary — see [Colours](Colours.md). Hex is not one
@@ -135,6 +165,10 @@ An item's own colour wins. Failing that, `-BarColor` colours every bar, and fail
 that the palette is handed out in turn and cycles — `-Palette` replaces it. Under
 `NO_COLOR` or redirected output the layout is unchanged and the styling is dropped.
 
+<!-- demo-media -->
+![4. Item colour, -BarColor, -Palette](media/AnsiBarChart/4.png)
+<!-- /demo-media -->
+
 ## Nesting
 
 It is a rendering, so it goes wherever one goes — a panel's content, a grid cell, a
@@ -143,6 +177,10 @@ table cell:
 ```powershell
 Format-AnsiPanel (Format-AnsiBarChart $fruit -Width 40) -Title 'Fruit' -Border Rounded | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![12. Nested — a chart inside a panel, a grid, and a table](media/AnsiBarChart/12.png)
+<!-- /demo-media -->
 
 ## Demo
 
@@ -155,6 +193,12 @@ and `-Palette`, the value column and `-ShowPercentage`, the label column, `-MaxV
 and `-BarWidth`, all four styles, the `-*Property` names, markup in labels, charts
 nested in a panel, a grid and a table, the guarded ends, anchoring, and two panes
 side by side.
+
+<!-- demo-media -->
+![14. Anchoring, and -NoNewline](media/AnsiBarChart/14.png)
+
+![15. Two panes — left and right](media/AnsiBarChart/15.png)
+<!-- /demo-media -->
 
 ## Tests
 

@@ -66,6 +66,12 @@ Format-AnsiPanel 'Body text here' -Title 'Build' | Out-AnsiHost
 # ╰────────────────╯
 ```
 
+<!-- demo-media -->
+![3. -Title and -TitleAlignment Left / Center / Right](media/AnsiPanel/3.png)
+
+![4. -Border Ascii / Square / Rounded / Heavy / Double / None](media/AnsiPanel/4.png)
+<!-- /demo-media -->
+
 ## Sizing
 
 The panel sizes to its widest line, widening if the title needs more room, and
@@ -78,6 +84,16 @@ Format-AnsiPanel 'x' -Expand | Out-AnsiHost                    # fills the buffe
 Format-AnsiPanel @('a', 'b') -Height 6 | Out-AnsiHost          # pads to six rows
 Format-AnsiPanel @('a', 'b', 'c', 'd') -Height 3 | Out-AnsiHost # keeps the first row only
 ```
+
+<!-- demo-media -->
+![6. -Padding 0 / 1 (default) / 3](media/AnsiPanel/6.png)
+
+![7. Content wraps to the inner width](media/AnsiPanel/7.png)
+
+![8. -Justify Left / Center / Right](media/AnsiPanel/8.png)
+
+![9. -Width / -Expand / -Height](media/AnsiPanel/9.png)
+<!-- /demo-media -->
 
 ## Nesting another rendering
 
@@ -92,6 +108,10 @@ Format-AnsiPanel @('Before', $table, 'After') -Title 'Mixed' | Out-AnsiHost
 
 Nested rows are measured on their runs, so no visible-width guessing is involved.
 `-Content` is an alias of `-Data` when the content is a single rendering.
+
+<!-- demo-media -->
+![17. Nested renderings inside a panel](media/AnsiPanel/17.png)
+<!-- /demo-media -->
 
 ## Framing pre-rendered strings with -Rendered
 
@@ -116,10 +136,20 @@ Format-AnsiPanel $tree -Rendered -Title 'Tree' -BorderColor BrightBlue | Out-Ans
 # ╰─────────────────────────╯
 ```
 
+<!-- demo-media -->
+![12. -Rendered frames captured PwshAnsi output](media/AnsiPanel/12.png)
+<!-- /demo-media -->
+
 ## Anchoring
 
 The top rule starts wherever the cursor already is; every later row resumes at
 that column, so the whole box hangs under its prefix.
+
+<!-- demo-media -->
+![13. Anchoring](media/AnsiPanel/13.png)
+
+![14. -NoNewline](media/AnsiPanel/14.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -143,6 +173,12 @@ both boxes the same width.
 Format-AnsiPanel $usageLines -Title 'Usage' -Border Square -BorderColor DarkGray -Padding 2 | Out-AnsiHost
 ```
 
+<!-- demo-media -->
+![15. Usage pattern — error callout](media/AnsiPanel/15.png)
+
+![16. Two panes — panels left and right](media/AnsiPanel/16.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -153,6 +189,20 @@ Numbered sections per feature: framed text, multiple lines, title alignment,
 every border, colours, padding, wrapping, `-Justify`, `-Width`/`-Expand`/`-Height`,
 markup/markdown, `-Escape`, `-Rendered` framing tree and json output, anchoring,
 `-NoNewline`, an error callout, two panels side by side, `NO_COLOR`.
+
+<!-- demo-media -->
+![1. Framed text](media/AnsiPanel/1.png)
+
+![2. Multiple lines](media/AnsiPanel/2.png)
+
+![5. -BorderColor / -TextColor / -TitleColor](media/AnsiPanel/5.png)
+
+![10. Markup / -Markdown](media/AnsiPanel/10.png)
+
+![11. -Escape (content stays literal)](media/AnsiPanel/11.png)
+
+![18. NO_COLOR strips styles, keeps layout](media/AnsiPanel/18.png)
+<!-- /demo-media -->
 
 ## Tests
 

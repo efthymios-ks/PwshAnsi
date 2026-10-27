@@ -3,9 +3,15 @@
 # Demo-ReadAnsiSelection.ps1
 # Exercises Read-AnsiSelection. Interactive: it waits for your keys.
 # Run: pwsh -File .\demo\Demo-ReadAnsiSelection.ps1
+# One section: pwsh -File .\demo\Demo-ReadAnsiSelection.ps1 -Case 1
 #
 # ↑↓ (or k/j) Move · Home/End Jump · PageUp/PageDown Page · Enter Selects ·
 # Esc Cancels and returns $null. Add your own with -Hotkeys.
+
+param(
+    # Run only these sections, by number: -Case 3b. Every section by default.
+    [string[]]$Case
+)
 
 $ErrorActionPreference = 'Stop'
 $srcRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'src'
@@ -16,13 +22,7 @@ Import-Module (Join-Path $srcRoot 'Format-AnsiPanel.psm1') -Force -DisableNameCh
 Import-Module (Join-Path $srcRoot 'Format-AnsiTable.psm1') -Force -DisableNameChecking
 Import-Module (Join-Path $srcRoot 'Out-AnsiHost.psm1') -Force -DisableNameChecking
 
-function Show-DemoHeader {
-    param([string]$Title)
-    Write-Host ''
-    Write-Host ('─' * 78) -ForegroundColor DarkGray
-    Write-Host " $Title" -ForegroundColor Cyan
-    Write-Host ('─' * 78) -ForegroundColor DarkGray
-}
+. (Join-Path $PSScriptRoot 'Demo.Core.ps1')
 
 function Show-Answer {
     param([string]$Label, [AllowNull()][object]$Value)
@@ -39,85 +39,95 @@ $components = @(
 )
 
 # 1. A short list — arrows move, enter selects
-Show-DemoHeader '1. A short list (↑↓ then enter)'
-$pick = Read-AnsiSelection 'Pick a fruit' $fruit
-Show-Answer 'Fruit' $pick
+Invoke-DemoCase '1' 'A short list (↑↓ then enter)' {
+    $pick = Read-AnsiSelection 'Pick a fruit' $fruit
+    Show-Answer 'Fruit' $pick
+}
 
 # 2. Paging — only -PageSize rows are shown, the window scrolls
-Show-DemoHeader '2. -PageSize 3 (try End, PageDown)'
-$paged = Read-AnsiSelection 'Pick a fruit' $fruit -PageSize 3
-Show-Answer 'Fruit' $paged
+Invoke-DemoCase '2' '-PageSize 3 (try End, PageDown)' {
+    $paged = Read-AnsiSelection 'Pick a fruit' $fruit -PageSize 3
+    Show-Answer 'Fruit' $paged
+}
 
 # 3. Objects — labelled by a property, the object comes back
-Show-DemoHeader '3. -LabelProperty (returns the object, not the label)'
-$component = Read-AnsiSelection 'Pick a component' $components -LabelProperty Name
-if ($null -ne $component) {
-    Format-AnsiTable @($component) -Border Square -BorderColor DarkGray -HeaderColor BrightWhite | Out-AnsiHost
-} else {
-    Show-Answer 'Component' $null
+Invoke-DemoCase '3' '-LabelProperty (returns the object, not the label)' {
+    $component = Read-AnsiSelection 'Pick a component' $components -LabelProperty Name
+    if ($null -ne $component) {
+        Format-AnsiTable @($component) -Border Square -BorderColor DarkGray -HeaderColor BrightWhite | Out-AnsiHost
+    } else {
+        Show-Answer 'Component' $null
+    }
 }
 
 # 4. Markup in the title and the labels
-Show-DemoHeader '4. Markup / -Markdown in the title and labels'
-$env = Read-AnsiSelection '[bold]Environment[/] :rocket:' @(
-    '[BrightGreen]Dev[/]'
-    '[BrightYellow]Staging[/]'
-    '[BrightRed]Production[/]'
-) -Markdown
-Show-Answer 'Environment' $env
-
-# 5. Colours — the cursor row, the title, the rest of the list
-Show-DemoHeader '5. -CursorColor / -TitleColor / -ChoiceColor'
-$coloured = Read-AnsiSelection 'Pick a fruit' $fruit `
-    -CursorColor BrightMagenta -TitleColor BrightWhite -ChoiceColor DarkGray
-Show-Answer 'Fruit' $coloured
-
-# 6. A timeout — wait it out to see $null
-Show-DemoHeader '6. -TimeoutSeconds 5'
-$timed = Read-AnsiSelection 'Quick, pick one' $fruit -TimeoutSeconds 5
-Show-Answer 'Fruit' $timed
-
-# 6b. -Selected — the cursor starts on the pre-chosen row
-Show-DemoHeader '6b. -Selected (cursor starts on Cherry)'
-$preselected = Read-AnsiSelection 'Pick a fruit' $fruit -Selected 'Cherry'
-Show-Answer 'Fruit' $preselected
-
-# 7. Groups — headers are shape only, the cursor moves straight past them
-Show-DemoHeader '7. -Grouped (headers are view only)'
-$grouped = @(
-    @{ Name = 'Berries'; Choices = @('Strawberry', 'Raspberry', 'Blueberry') }
-    @{ Name = 'Citrus'; Choices = @('Lemon', 'Lime', 'Orange') }
-    @{ Name = 'Stone'; Choices = @('Peach', 'Plum') }
-)
-$fromGroup = Read-AnsiSelection 'Pick a fruit' $grouped -Grouped -GroupColor BrightYellow
-Show-Answer 'Fruit' $fromGroup
-
-# 8. Group-Object output, straight in — name the property the members live under
-Show-DemoHeader '8. -Grouped over Group-Object (-GroupChoicesProperty Group)'
-$byExtension = Get-ChildItem (Join-Path (Split-Path -Parent $PSScriptRoot) 'src') -File |
-    Group-Object Extension
-$file = Read-AnsiSelection 'Which file?' $byExtension -Grouped -GroupChoicesProperty Group `
-    -LabelProperty Name -PageSize 12
-Show-Answer 'File' $(if ($null -ne $file) { $file.Name } else { $null })
-
-# 9. -Hotkeys — add extra keys on top of the built-ins (try R for refresh, F to jump to first)
-Show-DemoHeader '9. -Hotkeys (R sets a note, F jumps to first)'
-$hotkeys = @(
-    @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) $s.Note = 'refreshed at ' + (Get-Date -Format HH:mm:ss) } }
-    @{ Key = 'f'; Description = 'First'; Action = { param($s) $s.Index = $s.Focus[0] } }
-)
-$withHotkeys = Read-AnsiSelection 'Pick a fruit' $fruit -Hotkeys $hotkeys
-Show-Answer 'Fruit' $withHotkeys
-
-# 10. Usage pattern — pick, then show the choice in a panel
-Show-DemoHeader '10. Usage pattern — choose a target, then act on it'
-$target = Read-AnsiSelection 'Deploy to' @('Dev', 'Staging', 'Production')
-if ($null -eq $target) {
-    Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost
-} else {
-    Format-AnsiPanel "deploying to [BrightWhite]$target[/]" -Title 'Next step' `
-        -Border Heavy -BorderColor BrightGreen | Out-AnsiHost
+Invoke-DemoCase '4' 'Markup / -Markdown in the title and labels' {
+    $env = Read-AnsiSelection '[bold]Environment[/] :rocket:' @(
+        '[BrightGreen]Dev[/]'
+        '[BrightYellow]Staging[/]'
+        '[BrightRed]Production[/]'
+    ) -Markdown
+    Show-Answer 'Environment' $env
 }
 
-Show-DemoHeader 'Done'
-Write-Host ''
+# 5. Colours — the cursor row, the title, the rest of the list
+Invoke-DemoCase '5' '-CursorColor / -TitleColor / -ChoiceColor' {
+    $coloured = Read-AnsiSelection 'Pick a fruit' $fruit `
+        -CursorColor BrightMagenta -TitleColor BrightWhite -ChoiceColor DarkGray
+    Show-Answer 'Fruit' $coloured
+}
+
+# 6. A timeout — wait it out to see $null
+Invoke-DemoCase '6' '-TimeoutSeconds 5' {
+    $timed = Read-AnsiSelection 'Quick, pick one' $fruit -TimeoutSeconds 5
+    Show-Answer 'Fruit' $timed
+}
+
+# 6b. -Selected — the cursor starts on the pre-chosen row
+Invoke-DemoCase '6b' '-Selected (cursor starts on Cherry)' {
+    $preselected = Read-AnsiSelection 'Pick a fruit' $fruit -Selected 'Cherry'
+    Show-Answer 'Fruit' $preselected
+}
+
+# 7. Groups — headers are shape only, the cursor moves straight past them
+Invoke-DemoCase '7' '-Grouped (headers are view only)' {
+    $grouped = @(
+        @{ Name = 'Berries'; Choices = @('Strawberry', 'Raspberry', 'Blueberry') }
+        @{ Name = 'Citrus'; Choices = @('Lemon', 'Lime', 'Orange') }
+        @{ Name = 'Stone'; Choices = @('Peach', 'Plum') }
+    )
+    $fromGroup = Read-AnsiSelection 'Pick a fruit' $grouped -Grouped -GroupColor BrightYellow
+    Show-Answer 'Fruit' $fromGroup
+}
+
+# 8. Group-Object output, straight in — name the property the members live under
+Invoke-DemoCase '8' '-Grouped over Group-Object (-GroupChoicesProperty Group)' {
+    $byExtension = Get-ChildItem (Join-Path (Split-Path -Parent $PSScriptRoot) 'src') -File |
+        Group-Object Extension
+    $file = Read-AnsiSelection 'Which file?' $byExtension -Grouped -GroupChoicesProperty Group `
+        -LabelProperty Name -PageSize 12
+    Show-Answer 'File' $(if ($null -ne $file) { $file.Name } else { $null })
+}
+
+# 9. -Hotkeys — add extra keys on top of the built-ins (try R for refresh, F to jump to first)
+Invoke-DemoCase '9' '-Hotkeys (R sets a note, F jumps to first)' {
+    $hotkeys = @(
+        @{ Key = 'r'; Description = 'Refresh'; Action = { param($s) $s.Note = 'refreshed at ' + (Get-Date -Format HH:mm:ss) } }
+        @{ Key = 'f'; Description = 'First'; Action = { param($s) $s.Index = $s.Focus[0] } }
+    )
+    $withHotkeys = Read-AnsiSelection 'Pick a fruit' $fruit -Hotkeys $hotkeys
+    Show-Answer 'Fruit' $withHotkeys
+}
+
+# 10. Usage pattern — pick, then show the choice in a panel
+Invoke-DemoCase '10' 'Usage pattern — choose a target, then act on it' {
+    $target = Read-AnsiSelection 'Deploy to' @('Dev', 'Staging', 'Production')
+    if ($null -eq $target) {
+        Format-AnsiPanel 'Cancelled' -Border Square -BorderColor DarkGray | Out-AnsiHost
+    } else {
+        Format-AnsiPanel "deploying to [BrightWhite]$target[/]" -Title 'Next step' `
+            -Border Heavy -BorderColor BrightGreen | Out-AnsiHost
+    }
+}
+
+Complete-Demo

@@ -117,14 +117,14 @@ function Format-AnsiBarChart {
         $parse = @{ Markdown = [bool]$Markdown; Escape = [bool]$Escape }
 
         $total = 0
-        foreach ($item in $items) { $total += [Math]::Max(0, $item.Value) }
+        foreach ($item in $items) { $total += [Math]::Max(0.0, [double]$item.Value) }
 
         # Label runs up front, so the column is sized on visible text, not markup.
         $rowsData = [System.Collections.Generic.List[object]]::new()
         foreach ($item in $items) {
             $labelRuns = ConvertTo-AnsiChartLabel -Text $item.Label -Fg $labelFg -Parse $parse
             $text = if ($ShowPercentage) {
-                $share = if ($total -gt 0) { ([Math]::Max(0, $item.Value) / $total) * 100 } else { 0 }
+                $share = if ($total -gt 0) { ([Math]::Max(0.0, [double]$item.Value) / $total) * 100 } else { 0 }
                 (Format-AnsiNumber -Number $share -Format $ValueFormat) + '%'
             } else {
                 Format-AnsiNumber -Number $item.Value -Format $ValueFormat

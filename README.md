@@ -135,6 +135,26 @@ pwsh -File .\demo\Demo-ReadAnsiPause.ps1
 pwsh -File .\demo\Demo-AnsiInput.ps1
 ```
 
+`-Case` runs only the numbered sections you name, every one by default:
+
+```powershell
+pwsh -File .\demo\Demo-AnsiTable.ps1 -Case 3b
+```
+
+## Record the docs images
+
+```powershell
+pwsh -File .\Export-DemoMedia.ps1                            # every demo
+pwsh -File .\Export-DemoMedia.ps1 -Name AnsiTable -Case 2    # one section
+pwsh -File .\Export-DemoMedia.ps1 -DocsOnly                  # relink only
+```
+
+Runs each numbered section in a hidden console, types its prompts' keys, and draws
+what it showed: a PNG for a static section, a GIF for a live one, cropped to its
+content, in `docs\media\<demo>\<section>`. Then links each image into its docs page
+under the heading the script's table names. Quote a section ending in `d`, as
+`-Case '3d'`: PowerShell reads `3d` as a number.
+
 ## Build and publish
 
 ```powershell

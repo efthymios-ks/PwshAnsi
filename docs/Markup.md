@@ -109,6 +109,26 @@ pwsh -File .\demo\Demo-AnsiEmoji.ps1                    # every name, as one mat
 pwsh -File .\demo\Demo-AnsiEmoji.ps1 -Filter '*heart*'  # or just some of them
 ```
 
+<!-- demo-media -->
+![1. The table](media/AnsiEmoji/1.png)
+
+![2. PwshAnsi's own short names come first](media/AnsiEmoji/2.png)
+
+![4. A page of the matrix — fixed columns](media/AnsiEmoji/4.png)
+
+![5. Tokens work wherever text does](media/AnsiEmoji/5.png)
+
+![6. The token grammar](media/AnsiEmoji/6.png)
+
+![7. Variation selectors are part of the glyph](media/AnsiEmoji/7.png)
+
+![8. Anchoring, and -NoNewline](media/AnsiEmoji/8.png)
+
+![9. Two panes — left and right](media/AnsiEmoji/9.png)
+
+![10. Looking one up](media/AnsiEmoji/10.png)
+<!-- /demo-media -->
+
 ## Escaping everything
 
 `-Escape` treats the input as literal text: no markup, no markdown, no emoji.

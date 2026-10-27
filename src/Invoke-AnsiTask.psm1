@@ -131,7 +131,8 @@ function Invoke-AnsiTask {
         $state.StepStatus = $null
         $state.StepReason = ''
         Write-AnsiTaskLine -State $state -Step $step -Status 'running'
-        Write-AnsiTaskBar -State $state
+        # -Replace: with -Show Bar no step line is written, so the last bar is still on screen.
+        Write-AnsiTaskBar -State $state -Replace
 
         $started = [System.Diagnostics.Stopwatch]::StartNew()
         $ok = $true
@@ -156,7 +157,7 @@ function Invoke-AnsiTask {
         $state.Index++
         $state.Fraction = 0.0
         Write-AnsiTaskLine -State $state -Step $step -Status $status -Duration $duration -Reason $reason -Replace
-        Write-AnsiTaskBar -State $state
+        Write-AnsiTaskBar -State $state -Replace
 
         $null = $results.Add([PSCustomObject]@{
                 PSTypeName = 'PwshAnsi.TaskResult'

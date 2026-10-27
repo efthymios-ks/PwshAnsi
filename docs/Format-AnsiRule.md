@@ -57,6 +57,14 @@ Format-AnsiRule -Char '=' -Width 20 | Out-AnsiHost      # ====================
 Format-AnsiRule -Char '<>' -Width 7 | Out-AnsiHost      # <><><><
 ```
 
+<!-- demo-media -->
+![1. Plain rule (no title)](media/AnsiRule/1.png)
+
+![3. -Border Line / Double / Heavy / Ascii / Dashed / Dotted](media/AnsiRule/3.png)
+
+![4. -Char override](media/AnsiRule/4.png)
+<!-- /demo-media -->
+
 ## Title layout
 
 The row always fills the width exactly. Left and right alignment keep one line
@@ -78,6 +86,14 @@ Format-AnsiRule 'A very long title indeed' -Width 12 | Out-AnsiHost  # A very lo
 Format-AnsiRule 'Title' -Width 3 | Out-AnsiHost                      # ───
 ```
 
+<!-- demo-media -->
+![2. -Alignment Left / Center / Right](media/AnsiRule/2.png)
+
+![5. -TitlePadding 0 / 1 (default) / 4](media/AnsiRule/5.png)
+
+![10. Title truncation (… when it will not fit)](media/AnsiRule/10.png)
+<!-- /demo-media -->
+
 ## Styling
 
 Colour names: [Colours](Colours.md). Tags, markdown sugar, emoji, escaping:
@@ -88,6 +104,16 @@ Format-AnsiRule 'Deploy' -Color BrightWhite -LineColor DarkGray | Out-AnsiHost
 Format-AnsiRule '**Done** :check:' -Markdown -Alignment Center | Out-AnsiHost
 Format-AnsiRule '[BrightGreen]Passed[/]' -LineColor BrightBlack | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![6. -TitleColor / -Color and -LineColor](media/AnsiRule/6.png)
+
+![7. Markup in the title](media/AnsiRule/7.png)
+
+![8. -Markdown (sugar + emoji)](media/AnsiRule/8.png)
+
+![9. -Escape (title stays literal)](media/AnsiRule/9.png)
+<!-- /demo-media -->
 
 ## Anchoring, width, and spacing
 
@@ -105,6 +131,14 @@ Format-AnsiRule 'Section' -Spacing 1 | Out-AnsiHost # one blank row above and be
 
 With `-Spacing`, the blank rows are emitted plain and the rule row itself
 resumes at the anchor column.
+
+<!-- demo-media -->
+![11. -Spacing 1 (blank row above and below)](media/AnsiRule/11.png)
+
+![12. Anchoring vs -Expand](media/AnsiRule/12.png)
+
+![14. -NoNewline](media/AnsiRule/14.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -133,6 +167,12 @@ Format-AnsiRule 'Details' -Border Dashed -LineColor DarkGray | Out-AnsiHost
 Format-AnsiRule -Border Dotted | Out-AnsiHost
 ```
 
+<!-- demo-media -->
+![15. Usage pattern — section headings](media/AnsiRule/15.png)
+
+![16. Two panes — rules left and right](media/AnsiRule/16.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -143,6 +183,12 @@ Numbered sections per feature: plain rule, alignment, every border, `-Char`,
 `-TitlePadding`, colours, markup, markdown/emoji, `-Escape`, truncation,
 `-Spacing`, anchoring vs `-Expand`, pipeline input, `-NoNewline`, section
 headings, `NO_COLOR`.
+
+<!-- demo-media -->
+![13. Pipeline input](media/AnsiRule/13.png)
+
+![17. NO_COLOR strips styles, keeps layout](media/AnsiRule/17.png)
+<!-- /demo-media -->
 
 ## Tests
 

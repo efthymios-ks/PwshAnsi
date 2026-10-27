@@ -39,6 +39,10 @@ title animation earns its keep.
 Nothing is animated when output is redirected: a non-interactive host has no title
 bar. `-Force` overrides that.
 
+<!-- demo-media -->
+![3. -Speed Slow / Normal / Fast](media/AnsiTitleAnimation/3.gif)
+<!-- /demo-media -->
+
 ## Start-AnsiTitleAnimation
 
 ```powershell
@@ -64,6 +68,14 @@ one is already running.
 Three names, not a millisecond dial: `Normal` is a calm turn — a title bar is
 glanced at, not watched — and picking 137 ms is not a decision anyone needs to make.
 
+<!-- demo-media -->
+![1. The dots turn while your code runs](media/AnsiTitleAnimation/1.gif)
+
+![2. -FrameLast — dots on the right instead](media/AnsiTitleAnimation/2.gif)
+
+![4. Text is optional](media/AnsiTitleAnimation/4.gif)
+<!-- /demo-media -->
+
 ## Stop-AnsiTitleAnimation
 
 ```powershell
@@ -73,6 +85,10 @@ Stop-AnsiTitleAnimation [[-Title] <string>]
 Stops the worker and puts back the title that was there before starting, or the
 `-Title` you pass (including an empty one). Calling it with nothing running does
 nothing, and calling it twice is safe.
+
+<!-- demo-media -->
+![7. -FinalTitle](media/AnsiTitleAnimation/7.gif)
+<!-- /demo-media -->
 
 ## Invoke-AnsiTitleAnimation
 
@@ -90,6 +106,12 @@ straight through, and `-FinalTitle` leaves a chosen title behind.
 $rows = Invoke-AnsiTitleAnimation -Text 'Querying' -ScriptBlock { Invoke-Sqlcmd -Query $sql }
 Invoke-AnsiTitleAnimation -Text 'Building' -FinalTitle 'Build done' -ScriptBlock { ./build.ps1 }
 ```
+
+<!-- demo-media -->
+![5. Invoke-AnsiTitleAnimation wraps a job](media/AnsiTitleAnimation/5.gif)
+
+![6. The title is restored even when the job fails](media/AnsiTitleAnimation/6.gif)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -110,12 +132,20 @@ $null = Start-AnsiTitleAnimation 'Deploying' -FrameLast
 try { Invoke-Deploy } finally { Stop-AnsiTitleAnimation -Title 'Deploy finished' }
 ```
 
+<!-- demo-media -->
+![8. Usage pattern — a long job that still prints](media/AnsiTitleAnimation/8.gif)
+<!-- /demo-media -->
+
 ## When the title does not move
 
 The animation sets the title; the terminal decides whether to show it. Windows
 Terminal ignores it when the profile has `suppressApplicationTitle` or a fixed
 `tabTitle`, and some multiplexers rewrite it per prompt. Section 0 of the demo reads
 the title back while animating, which tells you which side is at fault.
+
+<!-- demo-media -->
+![0. Self check — what the console actually holds](media/AnsiTitleAnimation/0.gif)
+<!-- /demo-media -->
 
 ## Demo
 

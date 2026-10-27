@@ -93,6 +93,14 @@ share of the bar instead of sitting still.
 A `Write` line stays under its step.  
 The finished line still replaces the running one above it.
 
+<!-- demo-media -->
+![5. $task.Update() — progress the runner cannot count itself](media/AnsiTask/5.gif)
+
+![5b. -ProgressShow Percent — the percentage alone, no "0.5/1"](media/AnsiTask/5b.gif)
+
+![6. $task.Write() — a note above the bar](media/AnsiTask/6.gif)
+<!-- /demo-media -->
+
 ## Ending early
 
 `Skip` and `Stop` mark the step and let it return normally.  
@@ -130,6 +138,10 @@ Invoke-AnsiTask -Task @(
 A step that calls both ends the run.  
 A step that throws after either one is still a failure.
 
+<!-- demo-media -->
+![8b. $task.Skip() and $task.Stop() — end a step or the run early](media/AnsiTask/8b.gif)
+<!-- /demo-media -->
+
 ## Output and failure
 
 The scriptblock's own output passes straight through — progress goes to the host,
@@ -161,6 +173,12 @@ $results | Where-Object { -not $_.Ok } | ForEach-Object { $_.Error }
 Durations print as `0.4s`, `2.1s`, `1m 05s` — invariant, so a log reads the same on
 every machine.
 
+<!-- demo-media -->
+![7. A failing step stops the run and rethrows](media/AnsiTask/7.gif)
+
+![8. -ContinueOnError and -PassThru](media/AnsiTask/8.gif)
+<!-- /demo-media -->
+
 ## Live terminals and logs
 
 On a terminal, the running step is shown as `→ name` and rewritten as `✔ name 0.4s`
@@ -180,6 +198,20 @@ pwsh -File .\demo\Demo-AnsiTask.ps1
 One step and many, each `-Show` mode, `$task.Update()` and `$task.Write()`, a
 failing step, `-ContinueOnError` with `-PassThru` into a table, `Skip` and `Stop`,
 styles and colours, and a release run end to end.
+
+<!-- demo-media -->
+![1. One step: a name and a scriptblock](media/AnsiTask/1.gif)
+
+![2. Several steps — the bar counts them](media/AnsiTask/2.gif)
+
+![3. -Show Text — a line per step, nothing else](media/AnsiTask/3.gif)
+
+![4. -Show Bar — the bar alone, kept at the end](media/AnsiTask/4.gif)
+
+![9. -Style and the bar colours](media/AnsiTask/9.gif)
+
+![10. Usage pattern — a release run](media/AnsiTask/10.gif)
+<!-- /demo-media -->
 
 ## Tests
 

@@ -56,6 +56,14 @@ Read-AnsiSelection [-Title] <string> [-Choices] <object[]>
 Anything else is ignored. The cursor stops at the ends rather than wrapping, and
 with `-Grouped` it moves straight past the headers — every key lands on an item.
 
+<!-- demo-media -->
+![1. A short list (↑↓ then enter)](media/ReadAnsiSelection/1.gif)
+
+![2. -PageSize 3 (try End, PageDown)](media/ReadAnsiSelection/2.gif)
+
+![6b. -Selected (cursor starts on Cherry)](media/ReadAnsiSelection/6b.gif)
+<!-- /demo-media -->
+
 ## What it draws
 
 ```
@@ -67,6 +75,12 @@ Pick a fruit
 ```
 
 The counter appears only when the list is longer than `-PageSize`.
+
+<!-- demo-media -->
+![4. Markup / -Markdown in the title and labels](media/ReadAnsiSelection/4.gif)
+
+![5. -CursorColor / -TitleColor / -ChoiceColor](media/ReadAnsiSelection/5.gif)
+<!-- /demo-media -->
 
 ## Groups
 
@@ -127,6 +141,12 @@ Group 'Berries' has no Choices. Give every group its choices, or name the proper
 Groups holding no items at all leave nothing to pick, which is the empty-choices
 error.
 
+<!-- demo-media -->
+![7. -Grouped (headers are view only)](media/ReadAnsiSelection/7.gif)
+
+![8. -Grouped over Group-Object (-GroupChoicesProperty Group)](media/ReadAnsiSelection/8.gif)
+<!-- /demo-media -->
+
 ## Objects and labels
 
 ```powershell
@@ -143,6 +163,10 @@ Labels are parsed as markup, so a list can carry its own colour:
 ```powershell
 Read-AnsiSelection '[bold]Environment[/]' @('[BrightGreen]Dev[/]', '[BrightRed]Production[/]')
 ```
+
+<!-- demo-media -->
+![3. -LabelProperty (returns the object, not the label)](media/ReadAnsiSelection/3.gif)
+<!-- /demo-media -->
 
 ## Hotkeys
 
@@ -188,6 +212,10 @@ Read-AnsiSelection -Hotkeys: 'Enter' is a reserved default key.
 Passing `-Hotkeys` also adds a note row under the hint (blank when nothing was
 set), so the layout height is stable across repaints.
 
+<!-- demo-media -->
+![9. -Hotkeys (R sets a note, F jumps to first)](media/ReadAnsiSelection/9.gif)
+<!-- /demo-media -->
+
 ## Non-interactive and NO_COLOR
 
 Throws when input is redirected, and when `-Choices` is empty:
@@ -221,6 +249,10 @@ Format-AnsiPanel "deploying to [BrightWhite]$target[/]" -BorderColor BrightGreen
 $branch = Get-ChildItem .\src -File | Read-AnsiSelection 'Which file?' -LabelProperty Name
 ```
 
+<!-- demo-media -->
+![10. Usage pattern — choose a target, then act on it](media/ReadAnsiSelection/10.gif)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -230,6 +262,10 @@ pwsh -File .\demo\Demo-ReadAnsiSelection.ps1
 Interactive: a short list, `-PageSize` paging, `-LabelProperty` with objects,
 markup titles and labels, the colour parameters, a timeout, `-Grouped` on both a
 literal list and `Group-Object` output, and choosing a deploy target.
+
+<!-- demo-media -->
+![6. -TimeoutSeconds 5](media/ReadAnsiSelection/6.gif)
+<!-- /demo-media -->
 
 ## Tests
 

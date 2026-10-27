@@ -71,6 +71,14 @@ Format-AnsiGrid @('One', 'Two', 'Three') | Out-AnsiHost
 # three
 ```
 
+<!-- demo-media -->
+![1. Explicit rows (-Rows)](media/AnsiGrid/1.png)
+
+![12. Hard `n inside a cell](media/AnsiGrid/12.png)
+
+![13. Ragged rows, and a vertical stack](media/AnsiGrid/13.png)
+<!-- /demo-media -->
+
 ## Flowing a flat list
 
 `-Items` chunks for you. Without `-ColumnCount`, it fits as many columns of the
@@ -85,6 +93,14 @@ Format-AnsiGrid -Items $names -ColumnCount 3 | Out-AnsiHost
 Format-AnsiGrid -Items $names -MaxWidth 44 | Out-AnsiHost      # fewer columns in a narrow width
 ```
 
+<!-- demo-media -->
+![6. -Items flows a flat list into as many columns as fit](media/AnsiGrid/6.png)
+
+![7. -Items -ColumnCount 2 / 3 / 1](media/AnsiGrid/7.png)
+
+![8. -Items in a narrow width](media/AnsiGrid/8.png)
+<!-- /demo-media -->
+
 ## Nesting another rendering
 
 Any cell may be an `[Ansi.Rendering]`: its rows are used as-is, and the grid row
@@ -96,6 +112,10 @@ $left = Format-AnsiPanel @('Build  ok') -Title 'CI' -Border Square
 $right = Format-AnsiPanel @('Unit  712') -Title 'Counts' -Border Square
 Format-AnsiGrid @(, @($left, $right)) -Padding 3 | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![19. Nested renderings inside grid cells](media/AnsiGrid/19.png)
+<!-- /demo-media -->
 
 ## Sizing
 
@@ -115,10 +135,26 @@ columns stay on the first line. `-Wrap` is not needed for it.
 The right edge carries no trailing padding — a grid has no border — so rows end
 after their last visible cell and ragged rows leave no tail.
 
+<!-- demo-media -->
+![3. -Padding 0 / 2 (default) / 6](media/AnsiGrid/3.png)
+
+![4. -ColumnWidth (0 = size to content)](media/AnsiGrid/4.png)
+
+![5. -Expand](media/AnsiGrid/5.png)
+
+![11. Cell overflow: default vs -Wrap](media/AnsiGrid/11.png)
+<!-- /demo-media -->
+
 ## Anchoring
 
 The first row starts wherever the cursor already is; every later row resumes at
 that column.
+
+<!-- demo-media -->
+![15. Anchoring](media/AnsiGrid/15.png)
+
+![16. -NoNewline](media/AnsiGrid/16.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -153,6 +189,12 @@ Format-AnsiGrid -Items (Get-ChildItem).Name -Color BrightCyan | Out-AnsiHost
 headers or property selection; reach for [Format-AnsiTable](Format-AnsiTable.md) when
 you want either.
 
+<!-- demo-media -->
+![17. Usage pattern — key/value block](media/AnsiGrid/17.png)
+
+![18. Two panes — grids left and right](media/AnsiGrid/18.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -164,6 +206,18 @@ Numbered sections per feature: explicit rows, alignment, padding, `-ColumnWidth`
 `-Escape`, overflow vs `-Wrap`, hard newlines, ragged rows and vertical stacks,
 pipeline input, anchoring, `-NoNewline`, a key/value block, two grids side by
 side, `NO_COLOR`.
+
+<!-- demo-media -->
+![2. -Align per column](media/AnsiGrid/2.png)
+
+![9. Markup / -Markdown per cell](media/AnsiGrid/9.png)
+
+![10. -Escape (cells stay literal)](media/AnsiGrid/10.png)
+
+![14. Pipeline input (rows and items)](media/AnsiGrid/14.png)
+
+![20. NO_COLOR strips styles, keeps layout](media/AnsiGrid/20.png)
+<!-- /demo-media -->
 
 ## Tests
 

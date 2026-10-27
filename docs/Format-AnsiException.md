@@ -64,6 +64,12 @@ Format-AnsiException $record -Detail Full | Out-AnsiHost
 `-ShowStackTrace` adds just the frames without switching to `Full` (so inner
 exceptions stay hidden). `Short` ignores both.
 
+<!-- demo-media -->
+![1. Default detail](media/AnsiException/1.png)
+
+![2. -Detail Short / Default / Full](media/AnsiException/2.png)
+<!-- /demo-media -->
+
 ## Frames
 
 `ErrorRecord` input uses `ScriptStackTrace` — the script-level trace, which reads
@@ -84,6 +90,12 @@ Format-AnsiException $record -ShowStackTrace -MaxFrames 2 | Out-AnsiHost
 #     … 12 more frames
 ```
 
+<!-- demo-media -->
+![3. -ShowStackTrace](media/AnsiException/3.png)
+
+![4. -MaxFrames 2](media/AnsiException/4.png)
+<!-- /demo-media -->
+
 ## Inner exceptions
 
 `-Detail Full` walks `InnerException`, indenting one `-Indent` step per level and
@@ -96,11 +108,25 @@ Format-AnsiException $nested -Detail Full | Out-AnsiHost
 #         └─ System.TimeoutException: connection timed out after 30s
 ```
 
+<!-- demo-media -->
+![5. Inner exceptions (-Detail Full)](media/AnsiException/5.png)
+<!-- /demo-media -->
+
 ## Width and anchoring
 
 Long messages, positions, and frames fold at the effective width with a hanging
 indent, so wrapped text never lines up under the `at`. The first row starts
 wherever the cursor already is; later rows resume at the anchor column.
+
+<!-- demo-media -->
+![6. -Indent 2 / 4 (default) / 8](media/AnsiException/6.png)
+
+![10. Narrow width wraps and hangs](media/AnsiException/10.png)
+
+![11. Anchoring](media/AnsiException/11.png)
+
+![12. -NoNewline](media/AnsiException/12.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -127,6 +153,14 @@ try { Invoke-Step } catch {
 $errors | Format-AnsiException -Detail Short -MessageColor BrightYellow
 ```
 
+<!-- demo-media -->
+![14. Usage pattern — framed in a panel](media/AnsiException/14.png)
+
+![15. Usage pattern — report then rethrow](media/AnsiException/15.png)
+
+![16. Two panes — reports left and right](media/AnsiException/16.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -138,6 +172,18 @@ Numbered sections per feature: default detail, all three detail levels,
 strings, `Exception` input, narrow-width wrapping, anchoring, `-NoNewline`,
 pipeline input, a framed report, report-then-rethrow, two reports side by side,
 `NO_COLOR`.
+
+<!-- demo-media -->
+![7. Colours: message / type / path / line number / frame](media/AnsiException/7.png)
+
+![8. A bare string](media/AnsiException/8.png)
+
+![9. Exception input](media/AnsiException/9.png)
+
+![13. Pipeline input](media/AnsiException/13.png)
+
+![17. NO_COLOR strips styles, keeps layout](media/AnsiException/17.png)
+<!-- /demo-media -->
 
 ## Tests
 

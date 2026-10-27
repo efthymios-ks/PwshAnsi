@@ -60,6 +60,12 @@ Format-AnsiPath 'C:/Users\repo/file.txt' | Out-AnsiHost    # → C:/Users/repo/f
 Format-AnsiPath 'C:\Users\\repo\file.txt' | Out-AnsiHost   # → C:\Users\repo\file.txt
 ```
 
+<!-- demo-media -->
+![1. Path shapes](media/AnsiPath/1.png)
+
+![7. Separator handling](media/AnsiPath/7.png)
+<!-- /demo-media -->
+
 ## Truncation
 
 A path wider than the row keeps its root and leaf and gives up stem segments
@@ -76,6 +82,12 @@ Format-AnsiPath $deep -MaxWidth 18 | Out-AnsiHost   # C:\…\file.txt
 Format-AnsiPath $deep -MaxWidth 12 | Out-AnsiHost   # C:\…\file.t…
 ```
 
+<!-- demo-media -->
+![4. Truncation drops middle segments](media/AnsiPath/4.png)
+
+![5. Over-long leaf](media/AnsiPath/5.png)
+<!-- /demo-media -->
+
 ## Anchoring
 
 The first row starts wherever the cursor already is; every later row resumes at
@@ -89,6 +101,12 @@ Format-AnsiPath 'src\core.psm1', 'src\text.psm1', 'src\rule.psm1' | Out-AnsiHost
 #         src\rule.psm1
 ```
 
+<!-- demo-media -->
+![10. Anchoring](media/AnsiPath/10.png)
+
+![11. -NoNewline](media/AnsiPath/11.png)
+<!-- /demo-media -->
+
 ## Input forms
 
 ```powershell
@@ -100,6 +118,12 @@ Get-ChildItem .\src -File | Format-AnsiPath                 # binds FullName
 
 An empty string renders one blank row; `$null` and an empty collection render
 nothing.
+
+<!-- demo-media -->
+![8. Array and pipeline input](media/AnsiPath/8.png)
+
+![9. Get-ChildItem piped straight in](media/AnsiPath/9.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -125,6 +149,12 @@ Write-Host 'Error in ' -NoNewline -ForegroundColor BrightRed
 Format-AnsiPath $script -RootColor DarkGray -StemColor DarkGray -LeafColor BrightRed | Out-AnsiHost
 ```
 
+<!-- demo-media -->
+![12. Usage pattern — annotated file list](media/AnsiPath/12.png)
+
+![13. Two panes — paths left and right](media/AnsiPath/13.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -135,6 +165,16 @@ Numbered sections per feature: path shapes, part colours, `-Color` base,
 truncation ladder, over-long leaf, alignment, separator handling, array/pipeline
 input, `Get-ChildItem` binding, anchoring, `-NoNewline`, annotated file list,
 `NO_COLOR`.
+
+<!-- demo-media -->
+![2. -RootColor / -SeparatorColor / -StemColor / -LeafColor](media/AnsiPath/2.png)
+
+![3. -Color base colour (per-part overrides win)](media/AnsiPath/3.png)
+
+![6. -Alignment Left / Center / Right](media/AnsiPath/6.png)
+
+![14. NO_COLOR strips styles, keeps layout](media/AnsiPath/14.png)
+<!-- /demo-media -->
 
 ## Tests
 

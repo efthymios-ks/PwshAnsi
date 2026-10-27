@@ -59,6 +59,12 @@ Format-AnsiTree $tree | Out-AnsiHost
 #     └── leaf-c1
 ```
 
+<!-- demo-media -->
+![1. Nested hashtable, default Line guides](media/AnsiTree/1.png)
+
+![2. -Guide Line / DoubleLine / BoldLine / Ascii](media/AnsiTree/2.png)
+<!-- /demo-media -->
+
 ## Input shapes
 
 The root renders without a guide; children hang beneath it. Nodes may be
@@ -89,6 +95,14 @@ Format-AnsiTree @(@{ Value = 'Tree-1' }, @{ Value = 'Tree-2' }) | Out-AnsiHost
 @{ Value = 'a' }, @{ Value = 'b' } | Format-AnsiTree
 ```
 
+<!-- demo-media -->
+![8. Alternative input shapes](media/AnsiTree/8.png)
+
+![9. Bare values and forests](media/AnsiTree/9.png)
+
+![10. Pipeline input](media/AnsiTree/10.png)
+<!-- /demo-media -->
+
 ## Nesting another rendering
 
 A node's label may be an `[Ansi.Rendering]`, so a whole block can hang off a
@@ -103,6 +117,10 @@ Format-AnsiTree @{ Value = 'Test run'; Children = @(@{ Value = $counts }, @{ Val
 # │   failed    0
 # └── duration 13s
 ```
+
+<!-- demo-media -->
+![15. Nested renderings as tree labels](media/AnsiTree/15.png)
+<!-- /demo-media -->
 
 ## Depth limit
 
@@ -119,6 +137,10 @@ Format-AnsiTree $tree -MaxDepth 1 | Out-AnsiHost
 #     └── …
 ```
 
+<!-- demo-media -->
+![6. -MaxDepth collapses deeper branches to …](media/AnsiTree/6.png)
+<!-- /demo-media -->
+
 ## Label wrapping
 
 A label wider than the remaining width folds at word boundaries. Continuation
@@ -132,6 +154,10 @@ Format-AnsiTree $notes -MaxWidth 40 | Out-AnsiHost
 # └── short one
 ```
 
+<!-- demo-media -->
+![7. Label wrapping (aligns under the label, not the guide)](media/AnsiTree/7.png)
+<!-- /demo-media -->
+
 ## Styling
 
 ```powershell
@@ -139,6 +165,14 @@ Format-AnsiTree $tree -Color DarkGray -LabelColor BrightWhite | Out-AnsiHost
 Format-AnsiTree @{ Value = '[bold]Build[/]'; Children = @(@{ Value = ':check: **Done**' }) } -Markdown | Out-AnsiHost
 Format-AnsiTree @{ Value = '[bold]Literal[/]' } -Escape | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![3. -Color (guides) and -LabelColor](media/AnsiTree/3.png)
+
+![4. Markup / -Markdown labels](media/AnsiTree/4.png)
+
+![5. -Escape (labels stay literal)](media/AnsiTree/5.png)
+<!-- /demo-media -->
 
 ## Anchoring
 
@@ -152,6 +186,12 @@ Format-AnsiTree $tree | Out-AnsiHost
 #       ├── first
 #       └── last
 ```
+
+<!-- demo-media -->
+![11. Anchoring](media/AnsiTree/11.png)
+
+![12. -NoNewline](media/AnsiTree/12.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -220,6 +260,12 @@ for ($i = 0; $i -lt [Math]::Max($left.Count, $right.Count); $i++) {
 #   └── Format-AnsiTree.psm1        │    └── Markup.md
 ```
 
+<!-- demo-media -->
+![13. Usage pattern — a real directory tree](media/AnsiTree/13.png)
+
+![14. Two panes — one tree left, one right](media/AnsiTree/14.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -230,6 +276,10 @@ Numbered sections per feature: default rendering, all four guides, colours,
 markup/markdown labels, `-Escape`, `-MaxDepth`, label wrapping, alternative
 input shapes, bare values and forests, pipeline input, anchoring, `-NoNewline`, a
 real directory tree, two trees side by side, `NO_COLOR`.
+
+<!-- demo-media -->
+![16. NO_COLOR strips styles, keeps layout](media/AnsiTree/16.png)
+<!-- /demo-media -->
 
 ## Tests
 

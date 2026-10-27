@@ -45,6 +45,14 @@ Read-AnsiPause 'Continuing shortly' -TimeoutSeconds 5 -ShowCountdown
 Read-AnsiPause 'This line stays' -KeepMessage
 ```
 
+<!-- demo-media -->
+![1. Any key continues (the message erases itself)](media/ReadAnsiPause/1.gif)
+
+![2. -Enter (other keys are ignored)](media/ReadAnsiPause/2.gif)
+
+![8. Press Esc to cancel](media/ReadAnsiPause/8.gif)
+<!-- /demo-media -->
+
 ## Non-interactive and NO_COLOR
 
 Throws when input is redirected — a pause that cannot be released must fail rather
@@ -87,6 +95,12 @@ $answer = Read-AnsiPause 'Continuing in a moment' -TimeoutSeconds 10 -ShowCountd
 if ($null -eq $answer) { 'Unattended — carrying on' }
 ```
 
+<!-- demo-media -->
+![9. Usage pattern — page through output](media/ReadAnsiPause/9.gif)
+
+![10. Usage pattern — a last look before acting](media/ReadAnsiPause/10.gif)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -96,6 +110,18 @@ pwsh -File .\demo\Demo-ReadAnsiPause.ps1
 Interactive: any key, `-Enter`, custom and markdown messages, `-KeepMessage`, a
 timeout, a countdown, Esc, paging through renderings, and a destructive-step
 checkpoint.
+
+<!-- demo-media -->
+![3. A custom message with markup](media/ReadAnsiPause/3.gif)
+
+![4. -Markdown in the message](media/ReadAnsiPause/4.gif)
+
+![5. -KeepMessage (the row stays)](media/ReadAnsiPause/5.gif)
+
+![6. -TimeoutSeconds 5](media/ReadAnsiPause/6.gif)
+
+![7. -TimeoutSeconds 5 -ShowCountdown](media/ReadAnsiPause/7.gif)
+<!-- /demo-media -->
 
 ## Tests
 

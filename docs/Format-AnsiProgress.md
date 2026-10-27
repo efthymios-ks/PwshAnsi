@@ -64,6 +64,16 @@ still gets a sensible bar.
 | `Dots`   | `●`    | `·`   |
 | `Ascii`  | `#`    | `-`   |
 
+<!-- demo-media -->
+![1. A bar is a value out of a total](media/AnsiProgress/1.png)
+
+![2. -Total — count files, tests, bytes, anything](media/AnsiProgress/2.png)
+
+![5. -Style Blocks / Line / Dots / Ascii](media/AnsiProgress/5.png)
+
+![8. Rounding never claims done, nor claims nothing started](media/AnsiProgress/8.png)
+<!-- /demo-media -->
+
 ## The suffix
 
 | `-Show`   | Example    |
@@ -77,6 +87,10 @@ The percent is right-aligned to four columns and the count is padded to the widt
 of `-Total`, so the bar does not shift as the numbers grow. Whole numbers stay
 whole, fractions keep one decimal, and both are formatted invariantly — `1.5/4`
 reads the same on a comma locale as on a dot one.
+
+<!-- demo-media -->
+![4. -Show Percent / Count / Both / None](media/AnsiProgress/4.png)
+<!-- /demo-media -->
 
 ## Width
 
@@ -92,6 +106,12 @@ Format-AnsiProgress 55 'Short' -BarWidth 20 -LabelWidth 14
 Format-AnsiProgress 55 'A much longer label' -BarWidth 20 -LabelWidth 14
 ```
 
+<!-- demo-media -->
+![3. -Label and -LabelWidth](media/AnsiProgress/3.png)
+
+![7. -BarWidth — a fixed bar whatever the label says](media/AnsiProgress/7.png)
+<!-- /demo-media -->
+
 ## Colour
 
 Colours come from the shared vocabulary — see [Colours](Colours.md). Under
@@ -104,6 +124,10 @@ green without the caller branching:
 Format-AnsiProgress $done $name -Total $all -BarColor BrightYellow -CompleteColor BrightGreen
 ```
 
+<!-- demo-media -->
+![6. -BarColor, -EmptyColor, -CompleteColor](media/AnsiProgress/6.png)
+<!-- /demo-media -->
+
 ## Nesting
 
 It is a rendering, so it goes wherever one goes — a panel's content, a grid cell, a
@@ -115,6 +139,12 @@ Format-AnsiPanel @(
     Format-AnsiProgress 62  'Build'   -BarWidth 24 -LabelWidth 9 -BarColor BrightYellow
 ) -Title 'Pipeline' -Border Rounded | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![9. Nested — bars inside a panel, a grid, and a table](media/AnsiProgress/9.png)
+
+![10. Two panes — left and right](media/AnsiProgress/10.png)
+<!-- /demo-media -->
 
 ## Demo
 

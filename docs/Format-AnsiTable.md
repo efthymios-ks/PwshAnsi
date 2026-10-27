@@ -73,6 +73,12 @@ Format-AnsiTable $data -Border None | Out-AnsiHost
 # Text   147    built
 ```
 
+<!-- demo-media -->
+![1. Default rendering](media/AnsiTable/1.png)
+
+![2. -Border None / Ascii / Square / Rounded / Heavy / Double / Horizontal](media/AnsiTable/2.png)
+<!-- /demo-media -->
+
 ## Columns
 
 Without `-Property`, the first item decides the columns — its properties, a
@@ -88,6 +94,12 @@ Format-AnsiTable @('Alpha', 'Bravo') | Out-AnsiHost          # one 'Value' colum
 `Label`/`E` work as aliases of `Name`/`Expression`. A property that does not
 exist renders as an empty cell rather than throwing.
 
+<!-- demo-media -->
+![6. -HideHeaders and -ShowRowSeparators](media/AnsiTable/6.png)
+
+![7. -Property (names and calculated columns)](media/AnsiTable/7.png)
+<!-- /demo-media -->
+
 ## Nesting another rendering
 
 A cell value may be an `[Ansi.Rendering]` — typically from a calculated column. Its
@@ -101,6 +113,10 @@ Format-AnsiTable $suites -Property `
 # │ text  │ pass  147 │
 # │       │ fail    0 │
 ```
+
+<!-- demo-media -->
+![17. Nested renderings inside table cells](media/AnsiTable/17.png)
+<!-- /demo-media -->
 
 ## Width, overflow, and -Expand
 
@@ -117,6 +133,12 @@ Format-AnsiTable $data -Expand | Out-AnsiHost            # columns share the sla
 
 A hard `` `n `` inside a cell always splits it across rows.
 
+<!-- demo-media -->
+![8. -Width and -Expand](media/AnsiTable/8.png)
+
+![9. Cell overflow: default vs -Wrap](media/AnsiTable/9.png)
+<!-- /demo-media -->
+
 ## Alignment
 
 ```powershell
@@ -125,6 +147,10 @@ Format-AnsiTable $data -Align Right | Out-AnsiHost        # applies to every col
 ```
 
 Headers follow the same alignment as their column.
+
+<!-- demo-media -->
+![5. -Align per column (numbers read better right-aligned)](media/AnsiTable/5.png)
+<!-- /demo-media -->
 
 ## Styling
 
@@ -137,11 +163,33 @@ Format-AnsiTable $patterns -Escape | Out-AnsiHost         # '[bold]x[/]' stays l
 
 Column widths are measured on *visible* text, so markup never inflates a column.
 
+<!-- demo-media -->
+![3. -BorderColor / -HeaderColor / -TextColor](media/AnsiTable/3.png)
+
+![3b. Per-cell colours via markup](media/AnsiTable/3b.png)
+
+![3c. Backgrounds and a highlighted row](media/AnsiTable/3c.png)
+
+![3d. Border, header, text, and title colours together](media/AnsiTable/3d.png)
+
+![4. -Title (centered above the table) and -TitleColor](media/AnsiTable/4.png)
+
+![10. Markup / -Markdown in cells](media/AnsiTable/10.png)
+
+![11. -Escape (cells stay literal)](media/AnsiTable/11.png)
+<!-- /demo-media -->
+
 ## Anchoring
 
 The first row starts wherever the cursor already is; every later row resumes at
 that column, so the whole table hangs under its prefix. With `-Expand` the table
 fills the remaining buffer, not the whole terminal.
+
+<!-- demo-media -->
+![13. Anchoring](media/AnsiTable/13.png)
+
+![14. -NoNewline](media/AnsiTable/14.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -174,6 +222,12 @@ Format-AnsiTable @( | Out-AnsiHost
 [Format-AnsiTree](Format-AnsiTree.md#usage-patterns): capture each pane's rows, pad on
 visible width, zip them.
 
+<!-- demo-media -->
+![15. Usage pattern — summary with a total row](media/AnsiTable/15.png)
+
+![16. Two panes — tables left and right](media/AnsiTable/16.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -185,6 +239,12 @@ alignment, `-HideHeaders`/`-ShowRowSeparators`, `-Property` and calculated
 columns, `-Width`/`-Expand`, cell overflow vs `-Wrap`, markup/markdown cells,
 `-Escape`, input shapes, anchoring, `-NoNewline`, a summary table, two tables side
 by side, `NO_COLOR`.
+
+<!-- demo-media -->
+![12. Input shapes](media/AnsiTable/12.png)
+
+![18. NO_COLOR strips styles, keeps layout](media/AnsiTable/18.png)
+<!-- /demo-media -->
 
 ## Tests
 

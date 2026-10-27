@@ -112,7 +112,7 @@ function Format-AnsiBreakdownChart {
 
         if (-not $HideTags) {
             $total = 0
-            foreach ($item in $items) { $total += [Math]::Max(0, $item.Value) }
+            foreach ($item in $items) { $total += [Math]::Max(0.0, [double]$item.Value) }
 
             $tags = [System.Collections.Generic.List[object]]::new()
             foreach ($item in $items) {
@@ -126,7 +126,7 @@ function Format-AnsiBreakdownChart {
 
                 if (-not $HideTagValues) {
                     $text = if ($ShowPercentage) {
-                        $share = if ($total -gt 0) { ([Math]::Max(0, $item.Value) / $total) * 100 } else { 0 }
+                        $share = if ($total -gt 0) { ([Math]::Max(0.0, [double]$item.Value) / $total) * 100 } else { 0 }
                         (Format-AnsiNumber -Number $share -Format $ValueFormat) + '%'
                     } else {
                         Format-AnsiNumber -Number $item.Value -Format $ValueFormat
@@ -167,13 +167,13 @@ function Split-AnsiBreakdownCell {
     if ($count -eq 0 -or $Cells -le 0) { return , $shares }
 
     $total = 0
-    foreach ($item in $Items) { $total += [Math]::Max(0, $item.Value) }
+    foreach ($item in $Items) { $total += [Math]::Max(0.0, [double]$item.Value) }
     if ($total -le 0) { return , $shares }
 
     $exact = New-Object double[] $count
     $assigned = 0
     for ($i = 0; $i -lt $count; $i++) {
-        $exact[$i] = ([Math]::Max(0, $Items[$i].Value) / $total) * $Cells
+        $exact[$i] = ([Math]::Max(0.0, [double]$Items[$i].Value) / $total) * $Cells
         $shares[$i] = [int][Math]::Floor($exact[$i])
         $assigned += $shares[$i]
     }

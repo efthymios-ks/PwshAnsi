@@ -81,8 +81,11 @@ PwshAnsi/
 │  ├─ Demo-AnsiBreakdownChart.ps1
 │  ├─ Demo-AnsiEmoji.ps1          # every :name: the table knows
 │  ├─ Demo-AnsiTask.ps1
-│  └─ Demo-AnsiTitleAnimation.ps1
+│  ├─ Demo-AnsiTitleAnimation.ps1
+│  └─ Demo.Core.ps1              # section header, -Case, shared by every demo
 ├─ docs/                         # this documentation
+│  └─ media/                     # recorded demo images, one folder per demo
+├─ Export-DemoMedia.ps1           # record the demos as docs images
 ├─ Publish-AnsiModule.ps1         # build three-file module + manifest, then publish
 ├─ artifacts/                    # built module, gitignored
 ├─ Invoke-Test.ps1               # test runner
@@ -210,6 +213,11 @@ pwsh -File .\demo\Demo-AnsiEmoji.ps1               # every :name:, as one matrix
 pwsh -File .\demo\Demo-AnsiTask.ps1                # redraws in place
 pwsh -File .\demo\Demo-AnsiTitleAnimation.ps1      # watch the window title
 ```
+
+`-Case` runs only the numbered sections you name, for example
+`Demo-AnsiTable.ps1 -Case 3b`. Each section runs in a scope of its own, so it
+needs nothing an earlier section set up. `Export-DemoMedia.ps1` records every
+section as an image for these pages; see the README.
 
 ## Build and publish
 

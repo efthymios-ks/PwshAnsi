@@ -50,6 +50,14 @@ Format-AnsiText 'Long paragraph…' -MaxWidth 60 | Out-AnsiHost
 The default effective width is `BufferWidth - AnchorColumn`, so the block never
 overflows the terminal. `-MaxWidth` overrides that.
 
+<!-- demo-media -->
+![7. -Justify Left / Center / Right (within anchored width)](media/AnsiText/7.png)
+
+![13. Anchoring — continuation resumes at anchor column](media/AnsiText/13.png)
+
+![14. -NoNewline chaining](media/AnsiText/14.png)
+<!-- /demo-media -->
+
 ## Styling
 
 Colour names and `NO_COLOR` behaviour: [Colours](Colours.md).
@@ -59,6 +67,22 @@ Tags, markdown sugar, emoji, and escaping: [Markup and markdown](Markup.md).
 Format-AnsiText 'Job finished :check:. Wrote **42** rows to `sink.parquet`.' -Markdown | Out-AnsiHost
 Format-AnsiText '[bold BrightRed on Blue]Alert[/] · [italic]note[/]' | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![1. Plain text](media/AnsiText/1.png)
+
+![2. -Color parameter](media/AnsiText/2.png)
+
+![3. Markup syntax \[style ...\]text\[/\]](media/AnsiText/3.png)
+
+![4. Literal brackets via \[\[ and \]\]](media/AnsiText/4.png)
+
+![5. Markdown sugar (-Markdown)](media/AnsiText/5.png)
+
+![5b. Direct \[link=url\] markup tag](media/AnsiText/5b.png)
+
+![6. -Escape (treat input as literal)](media/AnsiText/6.png)
+<!-- /demo-media -->
 
 ## Overflow and truncation
 
@@ -81,6 +105,20 @@ Format-AnsiText $long -MaxWidth 40 -Overflow Crop | Out-AnsiHost
 Format-AnsiText $long -MaxWidth 40 -Overflow Ellipsis | Out-AnsiHost
 Format-AnsiText $long -MaxWidth 40 -MaxRows 2 | Out-AnsiHost
 ```
+
+<!-- demo-media -->
+![8. Wrapping (Fold, default)](media/AnsiText/8.png)
+
+![9. Wrapping preserves nested styles](media/AnsiText/9.png)
+
+![10. -Indent (continuation rows hang)](media/AnsiText/10.png)
+
+![11. -MaxRows (row cap adds …)](media/AnsiText/11.png)
+
+![12. -Overflow modes](media/AnsiText/12.png)
+
+![15d. -MaxRows caps rows, only the last row gets …](media/AnsiText/15d.png)
+<!-- /demo-media -->
 
 ## Input forms
 
@@ -112,6 +150,14 @@ Format-AnsiText 'Part-three'           -Color BrightBlue | Out-AnsiHost
 
 An empty string renders one blank row; `$null` and an empty collection render
 nothing at all.
+
+<!-- demo-media -->
+![15. Pipeline input](media/AnsiText/15.png)
+
+![15b. Array positional form](media/AnsiText/15b.png)
+
+![15c. `\n` hard breaks inside one string](media/AnsiText/15c.png)
+<!-- /demo-media -->
 
 ## Usage patterns
 
@@ -152,6 +198,12 @@ Format-AnsiText $veryLongLine -MaxWidth 80 -Overflow Ellipsis | Out-AnsiHost
 Format-AnsiText $document -MaxWidth 80 -MaxRows 5 | Out-AnsiHost
 ```
 
+<!-- demo-media -->
+![16. Combined features](media/AnsiText/16.png)
+
+![17. Two panes — one text block left, one right](media/AnsiText/17.png)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -162,6 +214,10 @@ The demo has numbered sections corresponding to each feature (plain text, colour
 markup, markdown, emoji, direct `[link=…]`, escape/literal, justify, wrap, indent,
 `-MaxRows`, `-Overflow`, anchoring, `-NoNewline`, pipeline/array/`` `n ``, combined,
 `NO_COLOR`).
+
+<!-- demo-media -->
+![18. NO_COLOR strips styles, keeps layout](media/AnsiText/18.png)
+<!-- /demo-media -->
 
 ## Tests
 

@@ -50,6 +50,14 @@ Read-AnsiConfirm '[bold BrightRed]Delete everything?[/]' -Default $false `
 Read-AnsiConfirm 'Are you sure?' -Default $null      # only y or n will do
 ```
 
+<!-- demo-media -->
+![1. Read-AnsiConfirm — default yes (\[Y/n\], Enter accepts)](media/ReadAnsiConfirm/1.gif)
+
+![2. -Default $false with -SuccessMessage / -FailureMessage](media/ReadAnsiConfirm/2.gif)
+
+![3. -Default $null (Enter is ignored, \[y/n\])](media/ReadAnsiConfirm/3.gif)
+<!-- /demo-media -->
+
 ## Non-interactive and NO_COLOR
 
 Throws when input is redirected — a prompt that cannot be answered must fail
@@ -86,6 +94,10 @@ switch ($go) {
 }
 ```
 
+<!-- demo-media -->
+![5. Usage pattern — guard a destructive step](media/ReadAnsiConfirm/5.gif)
+<!-- /demo-media -->
+
 ## Demo
 
 ```powershell
@@ -95,6 +107,10 @@ pwsh -File .\demo\Demo-ReadAnsiConfirm.ps1
 Interactive: default yes, `-Default $false` with success/failure messages,
 `-Default $null` (`[y/n]`, Enter ignored), a timeout, and guarding a destructive
 step.
+
+<!-- demo-media -->
+![4. -TimeoutSeconds 5 on a confirm](media/ReadAnsiConfirm/4.gif)
+<!-- /demo-media -->
 
 ## Tests
 
